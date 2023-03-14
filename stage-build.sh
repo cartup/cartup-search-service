@@ -32,7 +32,7 @@ if [ "${DEPLOY}" = 1 ]
 then
 	NEWTAG="${3}"
 	docker rm -f ${IMAGE_NAME}
-	docker run -d -p 8091:8080 --name ${IMAGE_NAME} -v /opt/docker/volumes/${IMAGE_NAME}:/tomcat/logs ${REGISTRY}/${IMAGE_NAME}:v${NEWTAG}
+	docker run -d -p 8093:8080 --name ${IMAGE_NAME} -v /opt/docker/volumes/${IMAGE_NAME}:/tomcat/logs ${REGISTRY}/${IMAGE_NAME}:v${NEWTAG}
 else
 	echo "skipping deploy"
 fi
