@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -40,6 +41,7 @@ public class SearchController {
         }
     }
 
+    @CrossOrigin
     @RequestMapping(value = "/v1/widgetserver/search/result", method = RequestMethod.GET, produces = "application/json")
     protected ResponseEntity<String> getSearchResult(@RequestParam Map<String, String> reqParams) {
         try {
