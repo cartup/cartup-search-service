@@ -11,6 +11,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @JsonIgnoreProperties(ignoreUnknown=true)
 public class SearchRequest {
     private String orgId;
+    private String userId;
     private String orgName;
     private String searchQuery;
     private Pagination pagination;
@@ -24,6 +25,10 @@ public class SearchRequest {
 
     public void setOrgName(String orgName) {
         this.orgName = orgName;
+    }
+    
+    public String getUserId() {
+        return userId;
     }
 
     public List<String> getCategories() {
