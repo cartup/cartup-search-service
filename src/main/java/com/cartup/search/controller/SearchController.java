@@ -6,6 +6,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -30,12 +31,12 @@ public class SearchController {
     private Gson gson;
 
     private SearchService service;
-
-    public SearchController(CacheService cacheService) {
+    
+    public SearchController(CacheService cacheService, RedisTemplate<String, String> redisTemplate) {
         try{
             gson = new Gson();
             RepoFactory.loadConfiguration();
-            this.service = new SearchService(cacheService);
+            this.service = new SearchService(cacheService, redisTemplate);
         } catch (Exception e){
             logger.error("Failed to initialize widget controller", e);
         }

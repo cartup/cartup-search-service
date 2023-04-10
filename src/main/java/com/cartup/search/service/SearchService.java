@@ -1,6 +1,7 @@
 package com.cartup.search.service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -8,34 +9,39 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.json.JSONObject;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.cartup.commons.constants.Constants;
 import com.cartup.commons.exceptions.CartUpRepoException;
 import com.cartup.commons.exceptions.CartUpServiceException;
 import com.cartup.commons.repo.CustomWidgetRepoClient;
 import com.cartup.commons.repo.ProductRepoClient;
+import com.cartup.commons.repo.RepoConstants;
 import com.cartup.commons.repo.RepoFactory;
+import com.cartup.commons.repo.SearchConfRepoClient;
 import com.cartup.commons.repo.SearchRepoClient;
 import com.cartup.commons.repo.model.FacetEntity;
 import com.cartup.commons.repo.model.product.SpotDyProductDocument;
+import com.cartup.commons.repo.model.search.CartUpOneWaySynonymDocument;
 import com.cartup.commons.repo.model.search.CartUpSearchConfDocument;
+import com.cartup.commons.repo.model.search.CartUpStopWordsDocument;
+import com.cartup.commons.repo.model.search.CartUpSynonymDocument;
 import com.cartup.commons.repo.model.search.Facet;
 import com.cartup.commons.repo.model.search.FacetComparator;
 import com.cartup.commons.repo.model.search.ProductsFacetResult;
@@ -62,29 +68,34 @@ public class SearchService {
 
 	private ProductRepoClient productRepoClient;
 
+	private SearchConfRepoClient searchConfRepoClient;
+
 	private Gson gson;
 
 	private SearchRepoClient client;
-	
-	private CacheService cacheService;
 
-	public SearchService(CacheService cacheService) {
+	private CacheService cacheService;
+	
+	private RedisTemplate<String, String> redisTemplate;
+
+	public SearchService(CacheService cacheService, RedisTemplate<String, String> redisTemplate) {
 		gson = new Gson();
 		this.customWidgetRepoClient = RepoFactory.getCustomWidgetRepoClient();
 		this.productRepoClient = RepoFactory.getProductRepoClient();
+		this.searchConfRepoClient = RepoFactory.getSearchConfRepoClient();
 		this.client = RepoFactory.getSearchRepoClient();
 		this.cacheService = cacheService;
+		this.redisTemplate = redisTemplate;
 		log.info("SearchService Initialization done");
 	}
 
 	public SearchResult processSearch(Map<String, String> reqParams, SearchRequest searchRequest) throws CartUpServiceException {
 		try {
-			
-//			ExecutorService ex = Executors.newSingleThreadExecutor();
-//			Future<List<ActionSet>> actionSetFuture = ex.submit(() -> searchAlgorithm(searchRequest));
-			
+
+			processSynonymAndStopWordAlgorithm(searchRequest);
+
 			List<ActionSet> actionSet = searchAlgorithm(searchRequest);
-			
+
 			String orgId = (EmptyUtil.isNotEmpty(searchRequest.getOrgId())) ? searchRequest.getOrgId() : reqParams.get(Constants.ORG_ID);
 			String searchQuery = (EmptyUtil.isNotEmpty(searchRequest.getSearchQuery())) ? searchRequest.getSearchQuery() : reqParams.get(Constants.QUERY);
 			if (EmptyUtil.isEmpty(orgId)){
@@ -100,11 +111,10 @@ public class SearchService {
 				throw new CartUpServiceException(String.format("No search configuration is saved for org id %s", orgId));
 			}
 			log.info("Found search conf for org id {}", orgId);
-			
+
 			AtomicReference<List<SpotDyProductDocument>> pinnedProductsRef = new AtomicReference<>(new ArrayList<>());
 			AtomicReference<List<String>> productsToBeRemovedRef = new AtomicReference<>(new ArrayList<>());
 			try {
-//				List<ActionSet> actionSet = actionSetFuture.get();
 				if(!actionSet.isEmpty()) {
 					actionSet.stream().forEach(action -> {
 						if(action.getType() == 1) {
@@ -137,15 +147,15 @@ public class SearchService {
 						}
 						if(action.getType() == 5) {
 							// TODO BOOST THE SPECIFIED FIELD AND VALUE
-							
+
 						}
 					});
 				}
 			} catch(Exception e) {
 				log.error("Exception occured while loading search config", e);			
 			}
-			
-			
+
+
 			SearchQueryBuilderTask task = new SearchQueryBuilderTask(orgId, reqParams, searchQuery, docu, searchRequest);
 			String solrQuery = task.build();
 			Map<String, Facet> facetMap = task.getFacetMap();
@@ -189,7 +199,7 @@ public class SearchService {
 				docs.add(info);
 			}
 		}
-		
+
 		List<ProductInfo> resultDocs = docs.stream().filter(doc -> !productsToBeRemovedRef.get().contains(doc.getName().toLowerCase())).collect(Collectors.toList());
 
 		Set<FacetEntity> facets = new HashSet<>();
@@ -238,14 +248,14 @@ public class SearchService {
 		return new SearchResult().setDocs(resultDocs).setFacetcount(orderedFacets);
 	}
 
-	public List<ActionSet> searchAlgorithm(SearchRequest searchRequest) {
+	private List<ActionSet> searchAlgorithm(SearchRequest searchRequest) {
 		List<ActionSet> actionSet = new ArrayList<>();
 		try {
 
 			Map<String, Object> cacheMap = this.gson.fromJson(this.cacheService.getSearchConfig(searchRequest.getOrgId()).toString(), new TypeToken<Map<String, Object>>() {}.getType());
-			
+
 			String searchQuery = searchRequest.getSearchQuery();
-			
+
 			String[] searchKeywordList = searchQuery.split(" ");
 
 			String startKeyword = searchKeywordList[0];
@@ -253,7 +263,7 @@ public class SearchService {
 			String endKeyword = searchKeywordList[length-1];
 
 			Set<SearchRules> possibleSearchRuleSet = new HashSet<>();
-			
+
 			Map<String, Set<SearchRules>> ruleMap = this.gson.fromJson(cacheMap.get("ruleLookupMap").toString(), new TypeToken<Map<String, Set<SearchRules>>>() {}.getType());
 
 			// Check for scenario what if the given search query keyword matches startsWith and endsWith
@@ -294,8 +304,8 @@ public class SearchService {
 					break;
 				}
 			}
-			
-			
+
+
 		} catch (Exception e) {
 			log.error("Error while search computation", e);
 		}
@@ -306,7 +316,7 @@ public class SearchService {
 	}
 
 	@Scheduled(fixedDelayString="${REFRESH_CACHE_FIXED_DELAY}")
-	public void refreshCache() {
+	private void refreshCache() {
 		log.info("Cache refresh");
 		SolrDocumentList result = new SolrDocumentList();
 		try {
@@ -317,22 +327,22 @@ public class SearchService {
 		if(!result.isEmpty()) {
 			List<Map<String, Object>> docs = new ArrayList<>();
 			result.stream()
-					.forEach(resultDoc -> {
-						Map<String, Object> fieldMap = new HashMap<>();
-						Iterator<Entry<String, Object>> ite = resultDoc.iterator();
-						while(ite.hasNext()) {
-							Entry<String, Object> entry = ite.next();
-							if(entry.getKey().equals("orgID_s")) {
-								fieldMap.put(entry.getKey(), entry.getValue());
-							}
-							if(entry.getKey().equals("search_rules_o")) {
-								fieldMap.put(entry.getKey(), entry.getValue());
-							}
-							if(fieldMap.size() == 2) {
-								docs.add(fieldMap);
-							}
-						}
-					});
+			.forEach(resultDoc -> {
+				Map<String, Object> fieldMap = new HashMap<>();
+				Iterator<Entry<String, Object>> ite = resultDoc.iterator();
+				while(ite.hasNext()) {
+					Entry<String, Object> entry = ite.next();
+					if(entry.getKey().equals("orgID_s")) {
+						fieldMap.put(entry.getKey(), entry.getValue());
+					}
+					if(entry.getKey().equals("search_rules_o")) {
+						fieldMap.put(entry.getKey(), entry.getValue());
+					}
+					if(fieldMap.size() == 2) {
+						docs.add(fieldMap);
+					}
+				}
+			});
 			Map<String, Object> cacheMap = new LinkedHashMap<>();
 			docs.stream().forEach(searchConfig -> {
 				Map<String, Object> keyMap = new LinkedHashMap<>();
@@ -342,9 +352,10 @@ public class SearchService {
 			});
 			// Calling this method to create a formatted rule map
 			this.cacheService.updateCache(this.gson.toJson(cacheMap));
+			this.prepareStopWordAndSynonymMap();
 		}
 	}
-	
+
 	private Map<String, Set<SearchRules>> prepareSearchRuleMap(String searchString) {
 		Set<SearchRules> searchRulesList = gson.fromJson(searchString, new TypeToken<Set<SearchRules>>() {}.getType());
 		Map<String, Set<SearchRules>> ruleMap = new LinkedHashMap<>();
@@ -368,7 +379,7 @@ public class SearchService {
 		}
 		return ruleMap;
 	}
-	
+
 	private void keyLookup(Map<String, Set<SearchRules>> ruleMap, String lookupKey, String lookupString) {
 		String splittedKey = lookupKey.split("\\*_\\*")[1]; 
 		String startsWithLookupKey = String.format("%d*_*%s", 1, splittedKey);
@@ -380,6 +391,94 @@ public class SearchService {
 		}
 		if(ruleMap.containsKey(endsWithLookupKey)) {
 			existingSearchRules.addAll(ruleMap.get(endsWithLookupKey));
+		}
+	}
+
+	private void prepareStopWordAndSynonymMap() {
+		try {
+			Optional<SolrDocumentList> existingDocList = this.processStopWordsAndSynonymGetRequest();
+			StringBuilder orgId = new StringBuilder();
+			if(existingDocList.isPresent()) {
+				Map<String, Object> orgBasedCacheMap = new HashMap<>();
+				Map<String, Object> cacheMap = new HashMap<>();
+				for(SolrDocument resultDoc : existingDocList.get()) {
+					Map<String, Object> fieldMap = new HashMap<>();
+					Iterator<Entry<String, Object>> ite = resultDoc.iterator();
+					while(ite.hasNext()) {
+						Entry<String, Object> entry = ite.next();
+						fieldMap.put(entry.getKey(), entry.getValue());
+						if(entry.getKey().equals(RepoConstants.ORG_ID_S)) {
+							orgId = new StringBuilder(String.valueOf(entry.getValue()));
+						}
+					}
+					cacheMap.put(fieldMap.get(RepoConstants.DOC_TYPE_S).toString(), fieldMap);
+					orgBasedCacheMap.put(orgId.toString(), cacheMap);
+				}
+
+				orgBasedCacheMap.entrySet().stream().forEach(entry -> {
+					this.redisTemplate.opsForValue().set(String.format("%s:%s", entry.getKey(), "synonym_stop_words_config_stat"), this.gson.toJson(entry.getValue()));
+				});
+			}
+		} catch (CartUpServiceException e) {
+			log.info("Exception occurred while caching stop words/synonym", e);
+		}
+	}
+
+	private Optional<SolrDocumentList> processStopWordsAndSynonymGetRequest() throws CartUpServiceException {
+		try {
+			SolrDocumentList documentList = searchConfRepoClient.findAll(Arrays.asList(RepoConstants.SEARCH_STOP_WORDS_DOC_TYPE, RepoConstants.SEARCH_ONE_WAY_SYNONYM_DOC_TYPE, RepoConstants.SEARCH_SYNONYM_DOC_TYPE));
+			return Optional.ofNullable(documentList);
+		} catch (Exception e){
+			log.error("Failed to get search conf document", e);
+		}
+		return Optional.empty();
+	}
+
+	private void processSynonymAndStopWordAlgorithm(SearchRequest searchRequest) {
+		String configKey = String.format("%s:%s", searchRequest.getOrgId(), "synonym_stop_words_config_stat");
+		
+		if(this.redisTemplate.hasKey(configKey)) {
+			String value = this.redisTemplate.opsForValue().get(configKey);
+			CartUpStopWordsDocument stopWordsDoc = this.gson.fromJson(new JSONObject(value).get("stopwords").toString(), CartUpStopWordsDocument.class);
+			CartUpSynonymDocument synonymDoc = this.gson.fromJson(new JSONObject(value).get("synonym").toString(), CartUpSynonymDocument.class);
+			CartUpOneWaySynonymDocument oneWaySynonymDoc = this.gson.fromJson(new JSONObject(value).get("onewaysynonym").toString(), CartUpOneWaySynonymDocument.class);
+
+			// removing all the stop words configured for that orgId
+			stopWordsDoc.getStopWordsData().getStopWords().stream()
+			.forEach(stopWord -> searchRequest.setSearchQuery(searchRequest.getSearchQuery().replaceAll(String.format(" %s", stopWord), "")));
+
+			// Two way synonym
+			Map<String, Set<String>> synonymPermutatedMap = new HashMap<>();
+			synonymDoc.getSynonymData().getSynonyms().stream()
+			.forEach(synonym -> {
+				for (String s : synonym) {
+					Set<String> values = new HashSet<>(synonym);
+					values.remove(s);
+					if(synonymPermutatedMap.containsKey(s)) {
+						Set<String> existingValue = new HashSet<>();
+						existingValue.addAll(synonymPermutatedMap.get(s));
+						existingValue.addAll(values);
+						synonymPermutatedMap.put(s, existingValue);
+					} else {
+						synonymPermutatedMap.put(s, values);
+					}
+				}
+			});
+			String resultQuery = Arrays.asList(searchRequest.getSearchQuery().split(" ")).stream()
+					.filter(synonym -> synonymPermutatedMap.containsKey(synonym))
+					.flatMap(synonym -> synonymPermutatedMap.get(synonym).stream()).collect(Collectors.joining(" "));
+			searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(resultQuery));
+
+			// Checking for matching synonym, if true, then appending all the synonym to the search query 
+			oneWaySynonymDoc.getOneWaySynonymData().getOneWaySynonyms().entrySet().stream()
+			.forEach(entrySet -> {
+				if(searchRequest.getSearchQuery().contains(entrySet.getKey())) {
+					String synonymns = entrySet.getValue().stream()
+							.filter(synonym -> !searchRequest.getSearchQuery().contains(synonym))
+							.collect(Collectors.joining(" "));
+					searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(synonymns));
+				}
+			});
 		}
 	}
 
