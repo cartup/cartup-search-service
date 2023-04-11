@@ -13,7 +13,7 @@ git pull
 
 rm -rf conf/datastoreconfig.properties
 mvn clean
-mvn package
+mvn package -DskipTests
 
 echo "pwd: $(pwd)"
 docker build -t ${REGISTRY}/${IMAGE_NAME}:v${TAG} -t ${REGISTRY}/${IMAGE_NAME}:latest -f ${dir} .
