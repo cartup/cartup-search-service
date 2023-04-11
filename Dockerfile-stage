@@ -1,5 +1,5 @@
 FROM openjdk:8
-ADD build/docker/entrypoint.sh /entrypoint.sh
+ADD build/docker/entrypoint-stage.sh /entrypoint.sh
 ADD src/main/resources/application.properties /
 COPY conf /conf/
 ADD conf/datastoreconfig-stage.properties /conf/datastoreconfig.properties
