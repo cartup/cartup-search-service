@@ -14,4 +14,4 @@ export JAVA_OPTS=$JVM_PARAM
 # use this logging to console, default is logging to file
 export CONF_BASE_PATH=/conf/
 
-java $JAVA_OPTS -jar -Dserver.tomcat.basedir=tomcat -Dserver.tomcat.accesslog.enabled=true /cartup-search-service.war
+java $JAVA_OPTS -jar -Dspring.profiles.active=stage -Dserver.tomcat.basedir=tomcat -Dserver.tomcat.accesslog.enabled=true /cartup-search-service.war
