@@ -25,7 +25,6 @@ import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.cartup.commons.constants.Constants;
 import com.cartup.commons.exceptions.CartUpRepoException;
@@ -319,9 +318,13 @@ public class SearchService {
 	private void refreshCache() {
 		log.info("Cache refresh");
 		SolrDocumentList result = new SolrDocumentList();
+		
 		try {
+			if(this.customWidgetRepoClient == null) {
+				RepoFactory.loadConfiguration();
+			}
 			result = this.customWidgetRepoClient.find("searchconf");
-		} catch (CartUpRepoException e) {
+		} catch (Exception e) {
 			log.error("Failed due to get search configuration because of the following exception ", e);
 		}
 		if(!result.isEmpty()) {
