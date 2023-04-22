@@ -22,10 +22,10 @@ import org.json.JSONObject;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.ParseException;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.cartup.commons.constants.Constants;
 import com.cartup.commons.exceptions.CartUpRepoException;
@@ -298,7 +298,14 @@ public class SearchService {
 				}
 				// using Spring's SpEL to evaluate the boolean expression
 				ExpressionParser parser = new SpelExpressionParser();
-				Expression exp = parser.parseExpression(ruleExpression.toString());
+				Expression exp = null;
+				try {
+					exp = parser.parseExpression(ruleExpression.toString());
+				} catch(ParseException e) {
+					ruleExpression = new StringBuilder(ruleExpression.substring(0, ruleExpression.length()-2));
+					exp = parser.parseExpression(ruleExpression.toString());
+				}
+				
 				if(exp.getValue(Boolean.class)) {
 					actionSet.addAll(searchRule.getActionSet());
 					break;
@@ -356,7 +363,7 @@ public class SearchService {
 		}
 	}
 
-	private Map<String, Set<SearchRules>> prepareSearchRuleMap(String searchString) {
+	private String prepareSearchRuleMap(String searchString) {
 		Set<SearchRules> searchRulesList = gson.fromJson(searchString, new TypeToken<Set<SearchRules>>() {}.getType());
 		Map<String, Set<SearchRules>> ruleMap = new LinkedHashMap<>();
 		for(SearchRules searchRules : searchRulesList) {
@@ -377,7 +384,7 @@ public class SearchService {
 				}
 			}
 		}
-		return ruleMap;
+		return this.gson.toJson(ruleMap);
 	}
 
 	private void keyLookup(Map<String, Set<SearchRules>> ruleMap, String lookupKey, String lookupString) {
