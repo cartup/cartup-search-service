@@ -75,7 +75,7 @@ public class SearchService {
 	private SearchRepoClient client;
 
 	private CacheService cacheService;
-	
+
 	private RedisTemplate<String, String> redisTemplate;
 
 	public SearchService(CacheService cacheService, RedisTemplate<String, String> redisTemplate) {
@@ -251,51 +251,66 @@ public class SearchService {
 	private List<ActionSet> searchAlgorithm(SearchRequest searchRequest) {
 		List<ActionSet> actionSet = new ArrayList<>();
 		try {
+			JSONObject cacheJsonObject = this.cacheService.getSearchConfig(searchRequest.getOrgId());
 
-			Map<String, Object> cacheMap = this.gson.fromJson(this.cacheService.getSearchConfig(searchRequest.getOrgId()).toString(), new TypeToken<Map<String, Object>>() {}.getType());
+			if(!JSONObject.NULL.equals(cacheJsonObject)) {
+				
+				Map<String, Object> cacheMap = this.gson.fromJson(String.valueOf(cacheJsonObject), new TypeToken<Map<String, Object>>() {}.getType());
 
-			String searchQuery = searchRequest.getSearchQuery();
+				String searchQuery = searchRequest.getSearchQuery();
 
-			String[] searchKeywordList = searchQuery.split(" ");
+				String[] searchKeywordList = searchQuery.split(" ");
 
-			String startKeyword = searchKeywordList[0];
-			int length = searchKeywordList.length;
-			String endKeyword = searchKeywordList[length-1];
+				String startKeyword = searchKeywordList[0];
+				int length = searchKeywordList.length;
+				String endKeyword = searchKeywordList[length-1];
 
-			Set<SearchRules> possibleSearchRuleSet = new HashSet<>();
+				Set<SearchRules> possibleSearchRuleSet = new HashSet<>();
 
-			Map<String, Set<SearchRules>> ruleMap = this.gson.fromJson(cacheMap.get("ruleLookupMap").toString(), new TypeToken<Map<String, Set<SearchRules>>>() {}.getType());
+				String ruleLookupJson = String.valueOf(cacheMap.get("ruleLookupMap"));
+				if(StringUtils.isNotBlank(ruleLookupJson)) {
+					Map<String, Set<SearchRules>> ruleMap = this.gson.fromJson(ruleLookupJson, new TypeToken<Map<String, Set<SearchRules>>>() {}.getType());
 
-			// Check for scenario what if the given search query keyword matches startsWith and endsWith
-			for(String keyword : searchKeywordList) {
-				String startsWithKey = String.format("%d*_*%s", 1, keyword);
-				if(ruleMap.containsKey(startsWithKey)) {
-					possibleSearchRuleSet.addAll(ruleMap.get(startsWithKey));
-				}
-				String containsWithKey = String.format("%d*_*%s", 2, keyword);
-				if(ruleMap.containsKey(containsWithKey)) {
-					possibleSearchRuleSet.addAll(ruleMap.get(containsWithKey));
-				}
-				String endsWithKey = String.format("%d*_*%s", 3, keyword);
-				if(ruleMap.containsKey(endsWithKey)) {
-					possibleSearchRuleSet.addAll(ruleMap.get(endsWithKey));
-				}
-			}
-			for(SearchRules searchRule : possibleSearchRuleSet) {
-				StringBuilder ruleExpression = new StringBuilder();
-				for(RuleSet ruleSet : searchRule.getRuleSet()) {
-					String operator = StringUtils.isNotBlank(ruleSet.getOperator())? (ruleSet.getOperator().equals("AND") ? "&&" : ruleSet.getOperator().equals("OR") ? "||" : StringUtils.EMPTY) : StringUtils.EMPTY;
-					if(ruleSet.getType() == 1) {
-						ruleExpression.append(ruleSet.getValue().equals(startKeyword)).append(operator);
+					// Check for scenario what if the given search query keyword matches startsWith and endsWith
+					for(String keyword : searchKeywordList) {
+						String startsWithKey = String.format("%d*_*%s", 1, keyword);
+						if(ruleMap.containsKey(startsWithKey)) {
+							possibleSearchRuleSet.addAll(ruleMap.get(startsWithKey));
+						}
+						String containsWithKey = String.format("%d*_*%s", 2, keyword);
+						if(ruleMap.containsKey(containsWithKey)) {
+							possibleSearchRuleSet.addAll(ruleMap.get(containsWithKey));
+						}
+						String endsWithKey = String.format("%d*_*%s", 3, keyword);
+						if(ruleMap.containsKey(endsWithKey)) {
+							possibleSearchRuleSet.addAll(ruleMap.get(endsWithKey));
+						}
 					}
-					if(ruleSet.getType() == 2) {
-						ruleExpression.append(searchQuery.contains(ruleSet.getValue())).append(operator);
-					}
+					for(SearchRules searchRule : possibleSearchRuleSet) {
+						StringBuilder ruleExpression = new StringBuilder();
+						for(RuleSet ruleSet : searchRule.getRuleSet()) {
+							String operator = StringUtils.isNotBlank(ruleSet.getOperator())? (ruleSet.getOperator().equals("AND") ? "&&" : ruleSet.getOperator().equals("OR") ? "||" : StringUtils.EMPTY) : StringUtils.EMPTY;
+							if(ruleSet.getType() == 1) {
+								ruleExpression.append(ruleSet.getValue().equals(startKeyword)).append(operator);
+							}
+							if(ruleSet.getType() == 2) {
+								ruleExpression.append(searchQuery.contains(ruleSet.getValue())).append(operator);
+							}
 
-					if(ruleSet.getType() == 3) {
-						ruleExpression.append(ruleSet.getValue().equals(endKeyword)).append(operator);
+							if(ruleSet.getType() == 3) {
+								ruleExpression.append(ruleSet.getValue().equals(endKeyword)).append(operator);
+							}
+						}
+						// using Spring's SpEL to evaluate the boolean expression
+						ExpressionParser parser = new SpelExpressionParser();
+						Expression exp = parser.parseExpression(ruleExpression.toString());
+						if(exp.getValue(Boolean.class)) {
+							actionSet.addAll(searchRule.getActionSet());
+							break;
+						}
 					}
 				}
+
 				// using Spring's SpEL to evaluate the boolean expression
 				ExpressionParser parser = new SpelExpressionParser();
 				Expression exp = null;
@@ -312,7 +327,6 @@ public class SearchService {
 				}
 			}
 
-
 		} catch (Exception e) {
 			log.error("Error while search computation", e);
 		}
@@ -326,9 +340,13 @@ public class SearchService {
 	private void refreshCache() {
 		log.info("Cache refresh");
 		SolrDocumentList result = new SolrDocumentList();
+
 		try {
+			if(this.customWidgetRepoClient == null) {
+				RepoFactory.loadConfiguration();
+			}
 			result = this.customWidgetRepoClient.find("searchconf");
-		} catch (CartUpRepoException e) {
+		} catch (Exception e) {
 			log.error("Failed due to get search configuration because of the following exception ", e);
 		}
 		if(!result.isEmpty()) {
@@ -443,7 +461,7 @@ public class SearchService {
 
 	private void processSynonymAndStopWordAlgorithm(SearchRequest searchRequest) {
 		String configKey = String.format("%s:%s", searchRequest.getOrgId(), "synonym_stop_words_config_stat");
-		
+
 		if(this.redisTemplate.hasKey(configKey)) {
 			String value = this.redisTemplate.opsForValue().get(configKey);
 			CartUpStopWordsDocument stopWordsDoc = this.gson.fromJson(new JSONObject(value).get("stopwords").toString(), CartUpStopWordsDocument.class);
