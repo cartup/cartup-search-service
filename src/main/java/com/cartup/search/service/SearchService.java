@@ -267,8 +267,8 @@ public class SearchService {
 
 				Set<SearchRules> possibleSearchRuleSet = new HashSet<>();
 
-				String ruleLookupJson = String.valueOf(cacheMap.get("ruleLookupMap"));
-				if(StringUtils.isNotBlank(ruleLookupJson)) {
+				if(cacheMap.containsKey("ruleLookupMap")) {
+					String ruleLookupJson = String.valueOf(cacheMap.get("ruleLookupMap"));
 					Map<String, Set<SearchRules>> ruleMap = this.gson.fromJson(ruleLookupJson, new TypeToken<Map<String, Set<SearchRules>>>() {}.getType());
 
 					// Check for scenario what if the given search query keyword matches startsWith and endsWith
@@ -309,21 +309,6 @@ public class SearchService {
 							break;
 						}
 					}
-				}
-
-				// using Spring's SpEL to evaluate the boolean expression
-				ExpressionParser parser = new SpelExpressionParser();
-				Expression exp = null;
-				try {
-					exp = parser.parseExpression(ruleExpression.toString());
-				} catch(ParseException e) {
-					ruleExpression = new StringBuilder(ruleExpression.substring(0, ruleExpression.length()-2));
-					exp = parser.parseExpression(ruleExpression.toString());
-				}
-				
-				if(exp.getValue(Boolean.class)) {
-					actionSet.addAll(searchRule.getActionSet());
-					break;
 				}
 			}
 
