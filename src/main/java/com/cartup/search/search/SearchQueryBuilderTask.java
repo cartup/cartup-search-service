@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -435,7 +436,9 @@ public class SearchQueryBuilderTask {
 						filteredSearchQueries.addAll(synonymPermutatedMap.get(synonym));
 						return synonym;
 					}).flatMap(synonym -> synonymPermutatedMap.get(synonym).stream()).collect(Collectors.joining(" "));
-			searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(resultQuery));
+			if(StringUtils.isNotBlank(resultQuery)) {
+				searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(resultQuery));
+			}
 
 			// Checking for matching synonym, if true, then appending all the synonym to the search query 
 			oneWaySynonymDoc.getOneWaySynonymData().getOneWaySynonyms().entrySet().stream()
