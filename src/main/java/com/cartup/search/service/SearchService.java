@@ -38,10 +38,7 @@ import com.cartup.commons.repo.SearchConfRepoClient;
 import com.cartup.commons.repo.SearchRepoClient;
 import com.cartup.commons.repo.model.FacetEntity;
 import com.cartup.commons.repo.model.product.SpotDyProductDocument;
-import com.cartup.commons.repo.model.search.CartUpOneWaySynonymDocument;
 import com.cartup.commons.repo.model.search.CartUpSearchConfDocument;
-import com.cartup.commons.repo.model.search.CartUpStopWordsDocument;
-import com.cartup.commons.repo.model.search.CartUpSynonymDocument;
 import com.cartup.commons.repo.model.search.Facet;
 import com.cartup.commons.repo.model.search.FacetComparator;
 import com.cartup.commons.repo.model.search.ProductsFacetResult;
@@ -91,8 +88,6 @@ public class SearchService {
 
 	public SearchResult processSearch(Map<String, String> reqParams, SearchRequest searchRequest) throws CartUpServiceException {
 		try {
-
-			processSynonymAndStopWordAlgorithm(searchRequest);
 
 			List<ActionSet> actionSet = searchAlgorithm(searchRequest);
 
@@ -156,7 +151,7 @@ public class SearchService {
 			}
 
 
-			SearchQueryBuilderTask task = new SearchQueryBuilderTask(orgId, reqParams, searchQuery, docu, searchRequest);
+			SearchQueryBuilderTask task = new SearchQueryBuilderTask(orgId, reqParams, searchQuery, docu, searchRequest, redisTemplate);
 			String solrQuery = task.build();
 			Map<String, Facet> facetMap = task.getFacetMap();
 			ProductsFacetResult res =  client.Execute(orgId, solrQuery, 1000);
@@ -194,7 +189,11 @@ public class SearchService {
 							doc.getLinkedProductDiscountedpriceDs(), doc.getStockIDs(), doc.getLinkedProductSkuSs(),
 							doc.getLinkedProductIdLs(), doc.getLinkedVariantIdSs());
 
-					info.setVariantInfo(variantInfo.generateVariantInfo());
+					try {
+						info.setVariantInfo(variantInfo.generateVariantInfo());
+					} catch (Exception e) {
+						
+					}
 				}
 				docs.add(info);
 			}
@@ -442,54 +441,6 @@ public class SearchService {
 			log.error("Failed to get search conf document", e);
 		}
 		return Optional.empty();
-	}
-
-	private void processSynonymAndStopWordAlgorithm(SearchRequest searchRequest) {
-		String configKey = String.format("%s:%s", searchRequest.getOrgId(), "synonym_stop_words_config_stat");
-
-		if(this.redisTemplate.hasKey(configKey)) {
-			String value = this.redisTemplate.opsForValue().get(configKey);
-			CartUpStopWordsDocument stopWordsDoc = this.gson.fromJson(new JSONObject(value).get("stopwords").toString(), CartUpStopWordsDocument.class);
-			CartUpSynonymDocument synonymDoc = this.gson.fromJson(new JSONObject(value).get("synonym").toString(), CartUpSynonymDocument.class);
-			CartUpOneWaySynonymDocument oneWaySynonymDoc = this.gson.fromJson(new JSONObject(value).get("onewaysynonym").toString(), CartUpOneWaySynonymDocument.class);
-
-			// removing all the stop words configured for that orgId
-			stopWordsDoc.getStopWordsData().getStopWords().stream()
-			.forEach(stopWord -> searchRequest.setSearchQuery(searchRequest.getSearchQuery().replaceAll(String.format(" %s", stopWord), "")));
-
-			// Two way synonym
-			Map<String, Set<String>> synonymPermutatedMap = new HashMap<>();
-			synonymDoc.getSynonymData().getSynonyms().stream()
-			.forEach(synonym -> {
-				for (String s : synonym) {
-					Set<String> values = new HashSet<>(synonym);
-					values.remove(s);
-					if(synonymPermutatedMap.containsKey(s)) {
-						Set<String> existingValue = new HashSet<>();
-						existingValue.addAll(synonymPermutatedMap.get(s));
-						existingValue.addAll(values);
-						synonymPermutatedMap.put(s, existingValue);
-					} else {
-						synonymPermutatedMap.put(s, values);
-					}
-				}
-			});
-			String resultQuery = Arrays.asList(searchRequest.getSearchQuery().split(" ")).stream()
-					.filter(synonym -> synonymPermutatedMap.containsKey(synonym))
-					.flatMap(synonym -> synonymPermutatedMap.get(synonym).stream()).collect(Collectors.joining(" "));
-			searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(resultQuery));
-
-			// Checking for matching synonym, if true, then appending all the synonym to the search query 
-			oneWaySynonymDoc.getOneWaySynonymData().getOneWaySynonyms().entrySet().stream()
-			.forEach(entrySet -> {
-				if(searchRequest.getSearchQuery().contains(entrySet.getKey())) {
-					String synonymns = entrySet.getValue().stream()
-							.filter(synonym -> !searchRequest.getSearchQuery().contains(synonym))
-							.collect(Collectors.joining(" "));
-					searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(synonymns));
-				}
-			});
-		}
 	}
 
 }
