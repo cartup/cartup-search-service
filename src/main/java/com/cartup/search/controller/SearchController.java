@@ -3,6 +3,7 @@ package com.cartup.search.controller;
 
 import java.util.Map;
 
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -53,6 +54,20 @@ public class SearchController {
         } catch (CartUpServiceException cse) {
             logger.error("Error while validating search request", cse);
             return new ResponseEntity<>(cse.getMessage(), HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            logger.error("Error while processing search request", e);
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    
+    @RequestMapping(value = "/v1/search/cache/refresh", method = RequestMethod.GET, produces = "application/json")
+    protected ResponseEntity<String> refreshCache(@RequestParam Map<String, String> reqParams) throws CartUpServiceException {
+        try {
+            logger.info(String.format("Refreshing cache for the given param : %s", gson.toJson(reqParams)));
+            this.service.refreshCache();
+            JSONObject response = new JSONObject();
+            response.put("message", "Cache refresh successful");
+            return ResponseEntity.ok().body(response.toString());
         } catch (Exception e) {
             logger.error("Error while processing search request", e);
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
