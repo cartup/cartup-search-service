@@ -410,7 +410,10 @@ public class SearchQueryBuilderTask {
 
 			// removing all the stop words configured for that orgId
 			stopWordsDoc.getStopWordsData().getStopWords().stream()
-			.forEach(stopWord -> searchRequest.setSearchQuery(searchRequest.getSearchQuery().replaceAll(String.format(" %s", stopWord), "")));
+			.forEach(stopWord -> {
+				searchRequest.setSearchQuery(searchRequest.getSearchQuery().replaceAll(String.format(" %s", stopWord), ""));
+				filteredSearchQueries = filteredSearchQueries.stream().map(query -> query.replaceAll(String.format(" %s", stopWord), "")).collect(Collectors.toSet());				
+			});
 
 			// Two way synonym
 			Map<String, Set<String>> synonymPermutatedMap = new HashMap<>();

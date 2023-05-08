@@ -321,7 +321,7 @@ public class SearchService {
 	}
 
 	@Scheduled(fixedDelayString="${REFRESH_CACHE_FIXED_DELAY}")
-	private void refreshCache() {
+	public void refreshCache() {
 		log.info("Cache refresh");
 		SolrDocumentList result = new SolrDocumentList();
 
