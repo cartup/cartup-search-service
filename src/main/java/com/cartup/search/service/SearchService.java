@@ -22,7 +22,6 @@ import org.json.JSONObject;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
-import org.springframework.expression.ParseException;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -361,6 +360,11 @@ public class SearchService {
 			});
 			// Calling this method to create a formatted rule map
 			this.cacheService.updateCache(this.gson.toJson(cacheMap));
+			List<String> liveCacheKeys = cacheMap.keySet().stream().map(orgId -> String.format("%s:%s", orgId, "search_config_stat")).collect(Collectors.toList());
+			List<String> deadCacheKeys = this.redisTemplate.keys("*:search_config_stat").stream()
+				.filter(cacheKey -> !liveCacheKeys.contains(cacheKey))
+				.collect(Collectors.toList());
+			this.redisTemplate.delete(deadCacheKeys);
 			this.prepareStopWordAndSynonymMap();
 		}
 	}
@@ -424,9 +428,15 @@ public class SearchService {
 					orgBasedCacheMap.put(orgId.toString(), cacheMap);
 				}
 
-				orgBasedCacheMap.entrySet().stream().forEach(entry -> {
-					this.redisTemplate.opsForValue().set(String.format("%s:%s", entry.getKey(), "synonym_stop_words_config_stat"), this.gson.toJson(entry.getValue()));
-				});
+				List<String> liveCacheKeys = orgBasedCacheMap.entrySet().stream().map(entry -> {
+					String cacheKey = String.format("%s:%s", entry.getKey(), "synonym_stop_words_config_stat");
+					this.redisTemplate.opsForValue().set(cacheKey, this.gson.toJson(entry.getValue()));
+					return cacheKey;
+				}).collect(Collectors.toList());
+				List<String> deadCacheKeys = this.redisTemplate.keys("*:synonym_stop_words_config_stat").stream()
+					.filter(cacheKey -> !liveCacheKeys.contains(cacheKey))
+					.collect(Collectors.toList());
+				this.redisTemplate.delete(deadCacheKeys);
 			}
 		} catch (CartUpServiceException e) {
 			log.info("Exception occurred while caching stop words/synonym", e);

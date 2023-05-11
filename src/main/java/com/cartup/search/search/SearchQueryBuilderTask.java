@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
@@ -89,7 +90,7 @@ public class SearchQueryBuilderTask {
 
     
     public SearchQueryBuilderTask makeApiCall() throws IOException, CartUpServiceException {
-    	
+    	this.inputSearch = searchRequest.getSearchQuery();
     	try {
 	    	KeywordSuggestorResponse keywordInfo = new KeywordSuggestorResponse();
 	        if (EmptyUtil.isNotNull(searchConf) && searchConf.isSpellcheck()){
@@ -139,7 +140,6 @@ public class SearchQueryBuilderTask {
 
     public String build() throws IOException, CartUpServiceException{
     	
-        makeApiCall();
         processSynonymAndStopWordAlgorithm();
         if(synonymSet.size() > 0) {
     		int searchWord = searchRequest.getSearchQuery().split(" ").length;
@@ -151,6 +151,7 @@ public class SearchQueryBuilderTask {
         	}
     		solrQuery = new StringBuffer(solrQuery.toString().replace("mm=2<75%25", mmValue));
     	}
+        makeApiCall();
         addOrgId();
         addCategories();
         addFilteredQueries();
@@ -275,7 +276,8 @@ public class SearchQueryBuilderTask {
     }
 
     public void addFilteredQueries() {
-        solrQuery.append(AND).append("q=").append(String.join(" ", filteredSearchQueries));
+    	String finalFilterQuery = new LinkedHashSet<>(Arrays.asList(filteredSearchQueries.stream().collect(Collectors.joining(" ")).split(" "))).stream().collect(Collectors.joining(" "));
+        solrQuery.append(AND).append("q=").append(String.join(" ", finalFilterQuery));
     }
 
     public void addCategories() throws UnsupportedEncodingException {
@@ -399,6 +401,7 @@ public class SearchQueryBuilderTask {
     }
     
     private void processSynonymAndStopWordAlgorithm() {
+    	// Using this variable to change the mm value if synonyms are used
     	this.synonymSet = new HashSet<>();
 		String configKey = String.format("%s:%s", searchRequest.getOrgId(), "synonym_stop_words_config_stat");
 
@@ -408,12 +411,13 @@ public class SearchQueryBuilderTask {
 			CartUpSynonymDocument synonymDoc = this.gson.fromJson(new JSONObject(value).get("synonym").toString(), CartUpSynonymDocument.class);
 			CartUpOneWaySynonymDocument oneWaySynonymDoc = this.gson.fromJson(new JSONObject(value).get("onewaysynonym").toString(), CartUpOneWaySynonymDocument.class);
 
+			AtomicReference<Set<String>> searchQueryWords = new AtomicReference<>(new LinkedHashSet<>(Arrays.asList(searchRequest.getSearchQuery().split(" "))));
 			// removing all the stop words configured for that orgId
 			stopWordsDoc.getStopWordsData().getStopWords().stream()
 			.forEach(stopWord -> {
-				searchRequest.setSearchQuery(searchRequest.getSearchQuery().replaceAll(String.format(" %s", stopWord), ""));
-				filteredSearchQueries = filteredSearchQueries.stream().map(query -> query.replaceAll(String.format(" %s", stopWord), "")).collect(Collectors.toSet());				
+				searchQueryWords.set(searchQueryWords.get().stream().filter(word -> !word.equals(stopWord)).collect(Collectors.toSet()));
 			});
+			searchRequest.setSearchQuery(searchQueryWords.get().stream().collect(Collectors.joining(" ")));
 
 			// Two way synonym
 			Map<String, Set<String>> synonymPermutatedMap = new HashMap<>();
@@ -436,7 +440,6 @@ public class SearchQueryBuilderTask {
 					.filter(synonym -> synonymPermutatedMap.containsKey(synonym))
 					.map(synonym -> {
 						synonymSet.addAll(synonymPermutatedMap.get(synonym));
-						filteredSearchQueries.addAll(synonymPermutatedMap.get(synonym));
 						return synonym;
 					}).flatMap(synonym -> synonymPermutatedMap.get(synonym).stream()).collect(Collectors.joining(" "));
 			if(StringUtils.isNotBlank(resultQuery)) {
@@ -451,12 +454,12 @@ public class SearchQueryBuilderTask {
 							.filter(synonym -> !searchRequest.getSearchQuery().contains(synonym))
 							.map(synonym -> {
 								synonymSet.add(synonym);
-								filteredSearchQueries.add(synonym);
 								return synonym;
 							}).collect(Collectors.joining(" "));
 					searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(synonymns));
 				}
 			});
+			filteredSearchQueries.add(searchRequest.getSearchQuery());
 		}
 	}
 }
