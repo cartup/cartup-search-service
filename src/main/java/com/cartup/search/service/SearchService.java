@@ -114,7 +114,7 @@ public class SearchService {
 						if(action.getType() == 1) {
 							// PIN AN ITEM
 							try {
-								pinnedProductsRef.set(productRepoClient.List(searchRequest.getOrgId(), action.getValue()));
+								pinnedProductsRef.set(new ArrayList<>(productRepoClient.ListUsingNames(searchRequest.getOrgId(), action.getValue(), true).values()));
 							} catch (CartUpRepoException e) {
 								log.error("Error occured while fetching the pinned items {}", action.getValue());
 							}
