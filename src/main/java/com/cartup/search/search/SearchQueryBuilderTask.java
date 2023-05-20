@@ -119,12 +119,21 @@ public class SearchQueryBuilderTask {
         return this;
     }
 
+    public void setmm() {
+    	String querywords = String.join(" ", filteredSearchQueries);
+    	int countWords = querywords.split("\\s").length;
+    	int mincount= (countWords < 3) ? 1: 2;
+    	solrQuery.append(AND).append("mm=" + String.valueOf(mincount) + "<75%25");	
+    }
+    
+    
     public String build() throws IOException, CartUpServiceException{
         makeApiCall();
         addOrgId();
         addCategories();
         addFilteredQueries();
         addSearchableFields();
+        setmm();
         addFacets();
         addPagination();
         addSortEntities();
