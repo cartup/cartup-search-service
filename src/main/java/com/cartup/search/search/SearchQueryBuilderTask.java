@@ -62,7 +62,7 @@ public class SearchQueryBuilderTask {
     // Filtered search queries is
     private Set<String> filteredSearchQueries = new HashSet<>();
     private List<String> categories = new ArrayList<>();
-    private StringBuffer solrQuery = new StringBuffer("defType=edismax&facet=on&facet.mincount=1&mm=2<75%25");
+    private StringBuffer solrQuery = new StringBuffer("defType=edismax&facet=on&facet.mincount=1");
     private Map<String, Facet> facetMap = new HashMap<>();
     public Map<String, Facet> getFacetMap(){
         return facetMap;
@@ -141,8 +141,9 @@ public class SearchQueryBuilderTask {
     public void setmm() {
     	String querywords = String.join(" ", filteredSearchQueries);
     	int countWords = querywords.split("\\s").length;
-    	int mincount= (countWords < 3) ? 1: 2;
-    	solrQuery.append(AND).append("mm=" + String.valueOf(mincount) + "<75%25");	
+    	int mincount= (countWords < 4) ? 1: 2;
+    	logger.info("Query String : %s %d", querywords, mincount);
+    	solrQuery.append(AND).append("mm=" + String.valueOf(mincount) + "<50%25");	
     }
     
     
