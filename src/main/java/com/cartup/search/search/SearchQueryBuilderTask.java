@@ -122,7 +122,7 @@ public class SearchQueryBuilderTask {
     public void setmm() {
     	String querywords = String.join(" ", filteredSearchQueries);
     	int countWords = querywords.split("\\s").length;
-    	int mincount= (countWords < 3) ? 1: 2;
+    	int mincount= (countWords < 4) ? 1: 2;
     	logger.info("Query String : %s %d", querywords, mincount);
     	solrQuery.append(AND).append("mm=" + String.valueOf(mincount) + "<50%25");	
     }
