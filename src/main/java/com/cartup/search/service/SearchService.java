@@ -183,7 +183,7 @@ public class SearchService {
 						.setDescription(doc.getDescriptionT())
 						.setDiscountedPrice(String.valueOf(doc.getDiscountePriceD()))
 						.setRating(String.valueOf(doc.getRatingD()));
-				if (Optional.ofNullable(doc.getVariantB()).isPresent()){
+				if (Optional.ofNullable(doc.getVariantB()).isPresent() && doc.getVariantB() == true){
 					VariantInfo variantInfo = new VariantInfo(doc.getLinkedProductNameSs(), doc.getLinkedProductPriceDs(),
 							doc.getLinkedProductDiscountedpriceDs(), doc.getStockIDs(), doc.getLinkedProductSkuSs(),
 							doc.getLinkedProductIdLs(), doc.getLinkedVariantIdSs());

@@ -46,19 +46,56 @@ public class VariantInfo {
         {
             for (int index=0; index<variantSize; ++index)
             {
-                JSONObject variantObject = new JSONObject();
-                variantObject.put("name", linked_product_name_ss.get(index));
-                variantObject.put("sku", linked_product_sku_ss.get(index));
-                variantObject.put("variantId", linked_variant_id_ss.get(index));
-                variantObject.put("price", String.valueOf(linked_product_price_ds.get(index)));
-                variantObject.put("productId", String.valueOf(linked_product_id_ls.get(index)));
-                if(linked_product_discountedprice_ds == null){
-                    variantObject.put("discountedPrice", null);
-                } else {
-                    variantObject.put("discountedPrice", String.valueOf(linked_product_discountedprice_ds.get(index)));
+                try
+                {
+                    JSONObject variantObject = new JSONObject();
+                    if(linked_product_name_ss == null){
+                        variantObject.put("name", null);
+                    } else {
+                        variantObject.put("name", linked_product_name_ss.get(index));
+                    }
+    
+                    if(linked_product_sku_ss == null){
+                        variantObject.put("sku", null);
+                    } else {
+                        variantObject.put("sku", linked_product_sku_ss.get(index));
+                    }
+    
+                    if(linked_variant_id_ss == null){
+                        variantObject.put("variantId", null);
+                    } else {
+                        variantObject.put("variantId", linked_variant_id_ss.get(index));
+                    }
+    
+                    if(linked_product_price_ds == null){
+                        variantObject.put("price", null);
+                    } else {
+                        variantObject.put("price", String.valueOf(linked_product_price_ds.get(index)));
+                    }
+    
+                    if(linked_product_id_ls == null){
+                        variantObject.put("productId", null);
+                    } else {
+                        variantObject.put("productId", String.valueOf(linked_product_id_ls.get(index)));
+                    }
+    
+                    if(stock_i_ds == null){
+                        variantObject.put("stock", null);
+                    } else {
+                        variantObject.put("stock", String.valueOf(stock_i_ds.get(index)));
+                    }
+    
+    
+                    if(linked_product_discountedprice_ds == null){
+                        variantObject.put("discountedPrice", null);
+                    } else {
+                        variantObject.put("discountedPrice", String.valueOf(linked_product_discountedprice_ds.get(index)));
+                    }
+                    variantInfoArray.add(variantObject);
+                } catch (JSONException jse) {
+                    logger.error("Exception occurred while populating variant related information", jse);
                 }
-                variantObject.put("stock", String.valueOf(stock_i_ds.get(index)));
-                variantInfoArray.add(variantObject);
+
             }
         } catch (JSONException jse) {
             logger.error("Exception occurred while populating variant related information", jse);
@@ -69,3 +106,4 @@ public class VariantInfo {
         return variantInfoArray;
     }
 }
+
