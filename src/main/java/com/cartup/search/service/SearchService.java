@@ -25,7 +25,6 @@ import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.cartup.commons.constants.Constants;
 import com.cartup.commons.exceptions.CartUpRepoException;
@@ -38,10 +37,7 @@ import com.cartup.commons.repo.SearchConfRepoClient;
 import com.cartup.commons.repo.SearchRepoClient;
 import com.cartup.commons.repo.model.FacetEntity;
 import com.cartup.commons.repo.model.product.SpotDyProductDocument;
-import com.cartup.commons.repo.model.search.CartUpOneWaySynonymDocument;
 import com.cartup.commons.repo.model.search.CartUpSearchConfDocument;
-import com.cartup.commons.repo.model.search.CartUpStopWordsDocument;
-import com.cartup.commons.repo.model.search.CartUpSynonymDocument;
 import com.cartup.commons.repo.model.search.Facet;
 import com.cartup.commons.repo.model.search.FacetComparator;
 import com.cartup.commons.repo.model.search.ProductsFacetResult;
@@ -75,7 +71,7 @@ public class SearchService {
 	private SearchRepoClient client;
 
 	private CacheService cacheService;
-	
+
 	private RedisTemplate<String, String> redisTemplate;
 
 	public SearchService(CacheService cacheService, RedisTemplate<String, String> redisTemplate) {
@@ -91,8 +87,6 @@ public class SearchService {
 
 	public SearchResult processSearch(Map<String, String> reqParams, SearchRequest searchRequest) throws CartUpServiceException {
 		try {
-
-			processSynonymAndStopWordAlgorithm(searchRequest);
 
 			List<ActionSet> actionSet = searchAlgorithm(searchRequest);
 
@@ -120,7 +114,7 @@ public class SearchService {
 						if(action.getType() == 1) {
 							// PIN AN ITEM
 							try {
-								pinnedProductsRef.set(productRepoClient.List(searchRequest.getOrgId(), action.getValue()));
+								pinnedProductsRef.set(new ArrayList<>(productRepoClient.ListUsingNames(searchRequest.getOrgId(), action.getValue(), true).values()));
 							} catch (CartUpRepoException e) {
 								log.error("Error occured while fetching the pinned items {}", action.getValue());
 							}
@@ -156,7 +150,7 @@ public class SearchService {
 			}
 
 
-			SearchQueryBuilderTask task = new SearchQueryBuilderTask(orgId, reqParams, searchQuery, docu, searchRequest);
+			SearchQueryBuilderTask task = new SearchQueryBuilderTask(orgId, reqParams, searchQuery, docu, searchRequest, redisTemplate);
 			String solrQuery = task.build();
 			Map<String, Facet> facetMap = task.getFacetMap();
 			ProductsFacetResult res =  client.Execute(orgId, solrQuery, 1000);
@@ -194,7 +188,11 @@ public class SearchService {
 							doc.getLinkedProductDiscountedpriceDs(), doc.getStockIDs(), doc.getLinkedProductSkuSs(),
 							doc.getLinkedProductIdLs(), doc.getLinkedVariantIdSs());
 
-					info.setVariantInfo(variantInfo.generateVariantInfo());
+					try {
+						info.setVariantInfo(variantInfo.generateVariantInfo());
+					} catch (Exception e) {
+						
+					}
 				}
 				docs.add(info);
 			}
@@ -251,60 +249,66 @@ public class SearchService {
 	private List<ActionSet> searchAlgorithm(SearchRequest searchRequest) {
 		List<ActionSet> actionSet = new ArrayList<>();
 		try {
+			JSONObject cacheJsonObject = this.cacheService.getSearchConfig(searchRequest.getOrgId());
 
-			Map<String, Object> cacheMap = this.gson.fromJson(this.cacheService.getSearchConfig(searchRequest.getOrgId()).toString(), new TypeToken<Map<String, Object>>() {}.getType());
+			if(!JSONObject.NULL.equals(cacheJsonObject)) {
+				
+				Map<String, Object> cacheMap = this.gson.fromJson(String.valueOf(cacheJsonObject), new TypeToken<Map<String, Object>>() {}.getType());
 
-			String searchQuery = searchRequest.getSearchQuery();
+				String searchQuery = searchRequest.getSearchQuery();
 
-			String[] searchKeywordList = searchQuery.split(" ");
+				String[] searchKeywordList = searchQuery.split(" ");
 
-			String startKeyword = searchKeywordList[0];
-			int length = searchKeywordList.length;
-			String endKeyword = searchKeywordList[length-1];
+				String startKeyword = searchKeywordList[0];
+				int length = searchKeywordList.length;
+				String endKeyword = searchKeywordList[length-1];
 
-			Set<SearchRules> possibleSearchRuleSet = new HashSet<>();
+				Set<SearchRules> possibleSearchRuleSet = new HashSet<>();
 
-			Map<String, Set<SearchRules>> ruleMap = this.gson.fromJson(cacheMap.get("ruleLookupMap").toString(), new TypeToken<Map<String, Set<SearchRules>>>() {}.getType());
+				if(cacheMap.containsKey("ruleLookupMap")) {
+					String ruleLookupJson = String.valueOf(cacheMap.get("ruleLookupMap"));
+					Map<String, Set<SearchRules>> ruleMap = this.gson.fromJson(ruleLookupJson, new TypeToken<Map<String, Set<SearchRules>>>() {}.getType());
 
-			// Check for scenario what if the given search query keyword matches startsWith and endsWith
-			for(String keyword : searchKeywordList) {
-				String startsWithKey = String.format("%d*_*%s", 1, keyword);
-				if(ruleMap.containsKey(startsWithKey)) {
-					possibleSearchRuleSet.addAll(ruleMap.get(startsWithKey));
-				}
-				String containsWithKey = String.format("%d*_*%s", 2, keyword);
-				if(ruleMap.containsKey(containsWithKey)) {
-					possibleSearchRuleSet.addAll(ruleMap.get(containsWithKey));
-				}
-				String endsWithKey = String.format("%d*_*%s", 3, keyword);
-				if(ruleMap.containsKey(endsWithKey)) {
-					possibleSearchRuleSet.addAll(ruleMap.get(endsWithKey));
+					// Check for scenario what if the given search query keyword matches startsWith and endsWith
+					for(String keyword : searchKeywordList) {
+						String startsWithKey = String.format("%d*_*%s", 1, keyword);
+						if(ruleMap.containsKey(startsWithKey)) {
+							possibleSearchRuleSet.addAll(ruleMap.get(startsWithKey));
+						}
+						String containsWithKey = String.format("%d*_*%s", 2, keyword);
+						if(ruleMap.containsKey(containsWithKey)) {
+							possibleSearchRuleSet.addAll(ruleMap.get(containsWithKey));
+						}
+						String endsWithKey = String.format("%d*_*%s", 3, keyword);
+						if(ruleMap.containsKey(endsWithKey)) {
+							possibleSearchRuleSet.addAll(ruleMap.get(endsWithKey));
+						}
+					}
+					for(SearchRules searchRule : possibleSearchRuleSet) {
+						StringBuilder ruleExpression = new StringBuilder();
+						for(RuleSet ruleSet : searchRule.getRuleSet()) {
+							String operator = StringUtils.isNotBlank(ruleSet.getOperator())? (ruleSet.getOperator().equals("AND") ? "&&" : ruleSet.getOperator().equals("OR") ? "||" : StringUtils.EMPTY) : StringUtils.EMPTY;
+							if(ruleSet.getType() == 1) {
+								ruleExpression.append(ruleSet.getValue().equals(startKeyword)).append(operator);
+							}
+							if(ruleSet.getType() == 2) {
+								ruleExpression.append(searchQuery.contains(ruleSet.getValue())).append(operator);
+							}
+
+							if(ruleSet.getType() == 3) {
+								ruleExpression.append(ruleSet.getValue().equals(endKeyword)).append(operator);
+							}
+						}
+						// using Spring's SpEL to evaluate the boolean expression
+						ExpressionParser parser = new SpelExpressionParser();
+						Expression exp = parser.parseExpression(ruleExpression.toString());
+						if(exp.getValue(Boolean.class)) {
+							actionSet.addAll(searchRule.getActionSet());
+							break;
+						}
+					}
 				}
 			}
-			for(SearchRules searchRule : possibleSearchRuleSet) {
-				StringBuilder ruleExpression = new StringBuilder();
-				for(RuleSet ruleSet : searchRule.getRuleSet()) {
-					String operator = StringUtils.isNotBlank(ruleSet.getOperator())? (ruleSet.getOperator().equals("AND") ? "&&" : ruleSet.getOperator().equals("OR") ? "||" : StringUtils.EMPTY) : StringUtils.EMPTY;
-					if(ruleSet.getType() == 1) {
-						ruleExpression.append(ruleSet.getValue().equals(startKeyword)).append(operator);
-					}
-					if(ruleSet.getType() == 2) {
-						ruleExpression.append(searchQuery.contains(ruleSet.getValue())).append(operator);
-					}
-
-					if(ruleSet.getType() == 3) {
-						ruleExpression.append(ruleSet.getValue().equals(endKeyword)).append(operator);
-					}
-				}
-				// using Spring's SpEL to evaluate the boolean expression
-				ExpressionParser parser = new SpelExpressionParser();
-				Expression exp = parser.parseExpression(ruleExpression.toString());
-				if(exp.getValue(Boolean.class)) {
-					actionSet.addAll(searchRule.getActionSet());
-					break;
-				}
-			}
-
 
 		} catch (Exception e) {
 			log.error("Error while search computation", e);
@@ -316,12 +320,16 @@ public class SearchService {
 	}
 
 	@Scheduled(fixedDelayString="${REFRESH_CACHE_FIXED_DELAY}")
-	private void refreshCache() {
+	public void refreshCache() {
 		log.info("Cache refresh");
 		SolrDocumentList result = new SolrDocumentList();
+
 		try {
+			if(this.customWidgetRepoClient == null) {
+				RepoFactory.loadConfiguration();
+			}
 			result = this.customWidgetRepoClient.find("searchconf");
-		} catch (CartUpRepoException e) {
+		} catch (Exception e) {
 			log.error("Failed due to get search configuration because of the following exception ", e);
 		}
 		if(!result.isEmpty()) {
@@ -352,11 +360,16 @@ public class SearchService {
 			});
 			// Calling this method to create a formatted rule map
 			this.cacheService.updateCache(this.gson.toJson(cacheMap));
+			List<String> liveCacheKeys = cacheMap.keySet().stream().map(orgId -> String.format("%s:%s", orgId, "search_config_stat")).collect(Collectors.toList());
+			List<String> deadCacheKeys = this.redisTemplate.keys("*:search_config_stat").stream()
+				.filter(cacheKey -> !liveCacheKeys.contains(cacheKey))
+				.collect(Collectors.toList());
+			this.redisTemplate.delete(deadCacheKeys);
 			this.prepareStopWordAndSynonymMap();
 		}
 	}
 
-	private Map<String, Set<SearchRules>> prepareSearchRuleMap(String searchString) {
+	private String prepareSearchRuleMap(String searchString) {
 		Set<SearchRules> searchRulesList = gson.fromJson(searchString, new TypeToken<Set<SearchRules>>() {}.getType());
 		Map<String, Set<SearchRules>> ruleMap = new LinkedHashMap<>();
 		for(SearchRules searchRules : searchRulesList) {
@@ -377,7 +390,7 @@ public class SearchService {
 				}
 			}
 		}
-		return ruleMap;
+		return this.gson.toJson(ruleMap);
 	}
 
 	private void keyLookup(Map<String, Set<SearchRules>> ruleMap, String lookupKey, String lookupString) {
@@ -415,9 +428,15 @@ public class SearchService {
 					orgBasedCacheMap.put(orgId.toString(), cacheMap);
 				}
 
-				orgBasedCacheMap.entrySet().stream().forEach(entry -> {
-					this.redisTemplate.opsForValue().set(String.format("%s:%s", entry.getKey(), "synonym_stop_words_config_stat"), this.gson.toJson(entry.getValue()));
-				});
+				List<String> liveCacheKeys = orgBasedCacheMap.entrySet().stream().map(entry -> {
+					String cacheKey = String.format("%s:%s", entry.getKey(), "synonym_stop_words_config_stat");
+					this.redisTemplate.opsForValue().set(cacheKey, this.gson.toJson(entry.getValue()));
+					return cacheKey;
+				}).collect(Collectors.toList());
+				List<String> deadCacheKeys = this.redisTemplate.keys("*:synonym_stop_words_config_stat").stream()
+					.filter(cacheKey -> !liveCacheKeys.contains(cacheKey))
+					.collect(Collectors.toList());
+				this.redisTemplate.delete(deadCacheKeys);
 			}
 		} catch (CartUpServiceException e) {
 			log.info("Exception occurred while caching stop words/synonym", e);
@@ -432,54 +451,6 @@ public class SearchService {
 			log.error("Failed to get search conf document", e);
 		}
 		return Optional.empty();
-	}
-
-	private void processSynonymAndStopWordAlgorithm(SearchRequest searchRequest) {
-		String configKey = String.format("%s:%s", searchRequest.getOrgId(), "synonym_stop_words_config_stat");
-		
-		if(this.redisTemplate.hasKey(configKey)) {
-			String value = this.redisTemplate.opsForValue().get(configKey);
-			CartUpStopWordsDocument stopWordsDoc = this.gson.fromJson(new JSONObject(value).get("stopwords").toString(), CartUpStopWordsDocument.class);
-			CartUpSynonymDocument synonymDoc = this.gson.fromJson(new JSONObject(value).get("synonym").toString(), CartUpSynonymDocument.class);
-			CartUpOneWaySynonymDocument oneWaySynonymDoc = this.gson.fromJson(new JSONObject(value).get("onewaysynonym").toString(), CartUpOneWaySynonymDocument.class);
-
-			// removing all the stop words configured for that orgId
-			stopWordsDoc.getStopWordsData().getStopWords().stream()
-			.forEach(stopWord -> searchRequest.setSearchQuery(searchRequest.getSearchQuery().replaceAll(String.format(" %s", stopWord), "")));
-
-			// Two way synonym
-			Map<String, Set<String>> synonymPermutatedMap = new HashMap<>();
-			synonymDoc.getSynonymData().getSynonyms().stream()
-			.forEach(synonym -> {
-				for (String s : synonym) {
-					Set<String> values = new HashSet<>(synonym);
-					values.remove(s);
-					if(synonymPermutatedMap.containsKey(s)) {
-						Set<String> existingValue = new HashSet<>();
-						existingValue.addAll(synonymPermutatedMap.get(s));
-						existingValue.addAll(values);
-						synonymPermutatedMap.put(s, existingValue);
-					} else {
-						synonymPermutatedMap.put(s, values);
-					}
-				}
-			});
-			String resultQuery = Arrays.asList(searchRequest.getSearchQuery().split(" ")).stream()
-					.filter(synonym -> synonymPermutatedMap.containsKey(synonym))
-					.flatMap(synonym -> synonymPermutatedMap.get(synonym).stream()).collect(Collectors.joining(" "));
-			searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(resultQuery));
-
-			// Checking for matching synonym, if true, then appending all the synonym to the search query 
-			oneWaySynonymDoc.getOneWaySynonymData().getOneWaySynonyms().entrySet().stream()
-			.forEach(entrySet -> {
-				if(searchRequest.getSearchQuery().contains(entrySet.getKey())) {
-					String synonymns = entrySet.getValue().stream()
-							.filter(synonym -> !searchRequest.getSearchQuery().contains(synonym))
-							.collect(Collectors.joining(" "));
-					searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(synonymns));
-				}
-			});
-		}
 	}
 
 }

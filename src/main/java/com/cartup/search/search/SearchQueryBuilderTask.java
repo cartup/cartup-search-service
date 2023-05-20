@@ -4,20 +4,31 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 import com.cartup.commons.exceptions.CartUpServiceException;
 import com.cartup.commons.repo.RepoConstants;
 import com.cartup.commons.repo.RepoFactory;
+import com.cartup.commons.repo.model.search.CartUpOneWaySynonymDocument;
 import com.cartup.commons.repo.model.search.CartUpSearchConfDocument;
+import com.cartup.commons.repo.model.search.CartUpStopWordsDocument;
+import com.cartup.commons.repo.model.search.CartUpSynonymDocument;
 import com.cartup.commons.repo.model.search.CategoryFacet;
 import com.cartup.commons.repo.model.search.Facet;
 import com.cartup.commons.repo.model.search.FieldOrder;
@@ -49,16 +60,22 @@ public class SearchQueryBuilderTask {
     private String inputSearch;
 
     // Filtered search queries is
-    private List<String> filteredSearchQueries = new ArrayList<>();
+    private Set<String> filteredSearchQueries = new HashSet<>();
     private List<String> categories = new ArrayList<>();
     private StringBuffer solrQuery = new StringBuffer("defType=edismax&facet=on&facet.mincount=1&mm=2<75%25");
     private Map<String, Facet> facetMap = new HashMap<>();
     public Map<String, Facet> getFacetMap(){
         return facetMap;
     }
+    
+    private RedisTemplate<String, String> redisTemplate;
+    
+    private Gson gson;
+    
+    private Set<String> synonymSet;
 
     public SearchQueryBuilderTask(String orgId, Map<String, String> params, 
-    		String inputSearch, CartUpSearchConfDocument searchConf, SearchRequest searchRequest){
+    		String inputSearch, CartUpSearchConfDocument searchConf, SearchRequest searchRequest, RedisTemplate<String, String> redisTemplate){
         this.orgId = orgId;
         this.searchConf = searchConf;
         this.facetBuildMap = searchConf.getFacetMap();
@@ -67,11 +84,13 @@ public class SearchQueryBuilderTask {
         this.searchRequest = searchRequest;
         this.searchSpellCheckApiUrl = RepoFactory.getSearchSpellCheckApiUrl();
         this.categoryListApiUrl = RepoFactory.getCategoryListApiUrl();
+        this.gson = new Gson();
+        this.redisTemplate = redisTemplate;
     }
 
     
     public SearchQueryBuilderTask makeApiCall() throws IOException, CartUpServiceException {
-    	
+    	this.inputSearch = searchRequest.getSearchQuery();
     	try {
 	    	KeywordSuggestorResponse keywordInfo = new KeywordSuggestorResponse();
 	        if (EmptyUtil.isNotNull(searchConf) && searchConf.isSpellcheck()){
@@ -94,7 +113,7 @@ public class SearchQueryBuilderTask {
 	        	if (filteredSearchQueries.size() == 0) 
 	        		filteredSearchQueries.add(inputSearch);
 	        	
-	        	filteredSearchQueries = new ArrayList<String>(new LinkedHashSet<String>(filteredSearchQueries));
+	        	filteredSearchQueries = new LinkedHashSet<String>(filteredSearchQueries);
 	        	if(keywordInfo.getAnnotations() != null) {
 	        		if (EmptyUtil.isNotEmpty(keywordInfo.getAnnotations().getCategories().getCat_suggestions())) {
 		        		categories.addAll(keywordInfo.getAnnotations().getCategories().getCat_suggestions());    		
@@ -119,12 +138,33 @@ public class SearchQueryBuilderTask {
         return this;
     }
 
+    public void setmm() {
+    	String querywords = String.join(" ", filteredSearchQueries);
+    	int countWords = querywords.split("\\s").length;
+    	int mincount= (countWords < 3) ? 1: 2;
+    	solrQuery.append(AND).append("mm=" + String.valueOf(mincount) + "<75%25");	
+    }
+    
+    
     public String build() throws IOException, CartUpServiceException{
+    	
+        processSynonymAndStopWordAlgorithm();
+        if(synonymSet.size() > 0) {
+    		int searchWord = searchRequest.getSearchQuery().split(" ").length;
+        	double possibleWordCount = Math.ceil((searchWord*75)/100.0);
+        	String mmValue = "mm=1";
+        	if(synonymSet.size() > possibleWordCount) {
+        		double synonymPercentage = (possibleWordCount/Double.valueOf(synonymSet.size())) * 100;
+        		mmValue = String.format("mm=2<-%s", Math.round(synonymPercentage));
+        	}
+    		solrQuery = new StringBuffer(solrQuery.toString().replace("mm=2<75%25", mmValue));
+    	}
         makeApiCall();
         addOrgId();
         addCategories();
         addFilteredQueries();
         addSearchableFields();
+        setmm();
         addFacets();
         addPagination();
         addSortEntities();
@@ -245,7 +285,8 @@ public class SearchQueryBuilderTask {
     }
 
     public void addFilteredQueries() {
-        solrQuery.append(AND).append("q=").append(String.join(" ", filteredSearchQueries));
+    	String finalFilterQuery = new LinkedHashSet<>(Arrays.asList(filteredSearchQueries.stream().collect(Collectors.joining(" ")).split(" "))).stream().collect(Collectors.joining(" "));
+        solrQuery.append(AND).append("q=").append(String.join(" ", finalFilterQuery));
     }
 
     public void addCategories() throws UnsupportedEncodingException {
@@ -367,4 +408,67 @@ public class SearchQueryBuilderTask {
         }
         return null;
     }
+    
+    private void processSynonymAndStopWordAlgorithm() {
+    	// Using this variable to change the mm value if synonyms are used
+    	this.synonymSet = new HashSet<>();
+		String configKey = String.format("%s:%s", searchRequest.getOrgId(), "synonym_stop_words_config_stat");
+
+		if(this.redisTemplate.hasKey(configKey)) {
+			String value = this.redisTemplate.opsForValue().get(configKey);
+			CartUpStopWordsDocument stopWordsDoc = this.gson.fromJson(new JSONObject(value).get("stopwords").toString(), CartUpStopWordsDocument.class);
+			CartUpSynonymDocument synonymDoc = this.gson.fromJson(new JSONObject(value).get("synonym").toString(), CartUpSynonymDocument.class);
+			CartUpOneWaySynonymDocument oneWaySynonymDoc = this.gson.fromJson(new JSONObject(value).get("onewaysynonym").toString(), CartUpOneWaySynonymDocument.class);
+
+			AtomicReference<Set<String>> searchQueryWords = new AtomicReference<>(new LinkedHashSet<>(Arrays.asList(searchRequest.getSearchQuery().split(" "))));
+			// removing all the stop words configured for that orgId
+			stopWordsDoc.getStopWordsData().getStopWords().stream()
+			.forEach(stopWord -> {
+				searchQueryWords.set(searchQueryWords.get().stream().filter(word -> !word.equals(stopWord)).collect(Collectors.toSet()));
+			});
+			searchRequest.setSearchQuery(searchQueryWords.get().stream().collect(Collectors.joining(" ")));
+
+			// Two way synonym
+			Map<String, Set<String>> synonymPermutatedMap = new HashMap<>();
+			synonymDoc.getSynonymData().getSynonyms().stream()
+			.forEach(synonym -> {
+				for (String s : synonym) {
+					Set<String> values = new HashSet<>(synonym);
+					values.remove(s);
+					if(synonymPermutatedMap.containsKey(s)) {
+						Set<String> existingValue = new HashSet<>();
+						existingValue.addAll(synonymPermutatedMap.get(s));
+						existingValue.addAll(values);
+						synonymPermutatedMap.put(s, existingValue);
+					} else {
+						synonymPermutatedMap.put(s, values);
+					}
+				}
+			});
+			String resultQuery = Arrays.asList(searchRequest.getSearchQuery().split(" ")).stream()
+					.filter(synonym -> synonymPermutatedMap.containsKey(synonym))
+					.map(synonym -> {
+						synonymSet.addAll(synonymPermutatedMap.get(synonym));
+						return synonym;
+					}).flatMap(synonym -> synonymPermutatedMap.get(synonym).stream()).collect(Collectors.joining(" "));
+			if(StringUtils.isNotBlank(resultQuery)) {
+				searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(resultQuery));
+			}
+
+			// Checking for matching synonym, if true, then appending all the synonym to the search query 
+			oneWaySynonymDoc.getOneWaySynonymData().getOneWaySynonyms().entrySet().stream()
+			.forEach(entrySet -> {
+				if(searchRequest.getSearchQuery().contains(entrySet.getKey())) {
+					String synonymns = entrySet.getValue().stream()
+							.filter(synonym -> !searchRequest.getSearchQuery().contains(synonym))
+							.map(synonym -> {
+								synonymSet.add(synonym);
+								return synonym;
+							}).collect(Collectors.joining(" "));
+					searchRequest.setSearchQuery(searchRequest.getSearchQuery().concat(" ").concat(synonymns));
+				}
+			});
+			filteredSearchQueries.add(searchRequest.getSearchQuery());
+		}
+	}
 }
