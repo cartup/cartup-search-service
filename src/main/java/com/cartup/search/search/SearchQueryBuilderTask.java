@@ -124,7 +124,7 @@ public class SearchQueryBuilderTask {
     	int countWords = querywords.split("\\s").length;
     	int mincount= (countWords < 3) ? 1: 2;
     	logger.info("Query String : %s %d", querywords, mincount);
-    	solrQuery.append(AND).append("mm=" + String.valueOf(mincount) + "<75%25");	
+    	solrQuery.append(AND).append("mm=" + String.valueOf(mincount) + "<50%25");	
     }
     
     
