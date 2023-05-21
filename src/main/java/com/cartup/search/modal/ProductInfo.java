@@ -26,6 +26,16 @@ public class ProductInfo {
     private String rating;
     private String color;
     private List<BadgingConfigCollection> badging;
+    private double stock;
+    
+    public double getStock() {
+        return stock;
+    }
+
+    public ProductInfo setStock(double stock) {
+        this.stock = stock;
+        return this;
+    }
 
     public String getRating() {
         return rating;
