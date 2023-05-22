@@ -278,7 +278,7 @@ public class SearchQueryBuilderTask {
     private String getFilterValue(FacetFilter ff){
         if (EmptyUtil.isNotEmpty(ff.getRepoFieldId()) && EmptyUtil.isNotEmpty(ff.getValue())){
         	if (ff.getRepoFieldId().endsWith("_s"))
-        		return new StringBuffer(ff.getRepoFieldId()).append(":").append("\"" + ff.getValue() + "\"").toString();
+        		return new StringBuffer(ff.getRepoFieldId()).append(":").append("\"" + ff.getValue().replaceAll("\"", "\\\\\"") + "\"").toString();
         	else
         		return new StringBuffer(ff.getRepoFieldId()).append(":").append(ff.getValue()).toString();
         }
