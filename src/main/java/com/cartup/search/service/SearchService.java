@@ -182,7 +182,9 @@ public class SearchService {
 						.setCurrentPageUrl(doc.getCannoicalUrlS())
 						.setDescription(doc.getDescriptionT())
 						.setDiscountedPrice(String.valueOf(doc.getDiscountePriceD()))
-						.setRating(String.valueOf(doc.getRatingD()));
+						.setRating(String.valueOf(doc.getRatingD()))
+						.setProductId(doc.getProductIdS())
+						.setStock(doc.getStockD());
 				if (Optional.ofNullable(doc.getVariantB()).isPresent() && doc.getVariantB() == true){
 					VariantInfo variantInfo = new VariantInfo(doc.getLinkedProductNameSs(), doc.getLinkedProductPriceDs(),
 							doc.getLinkedProductDiscountedpriceDs(), doc.getStockIDs(), doc.getLinkedProductSkuSs(),
@@ -355,7 +357,7 @@ public class SearchService {
 			docs.stream().forEach(searchConfig -> {
 				Map<String, Object> keyMap = new LinkedHashMap<>();
 				keyMap.put("ruleConfigMap", searchConfig.get("search_rules_o"));
-				keyMap.put("ruleLookupMap", this.prepareSearchRuleMap(searchConfig.get("search_rules_o").toString()));
+				keyMap.put("ruleLookupMap", this.prepareSearchRuleMap(searchConfig.get("search_rules_o").toString(), searchConfig.get("orgID_s").toString()));
 				cacheMap.put(searchConfig.get("orgID_s").toString(), keyMap);
 			});
 			// Calling this method to create a formatted rule map
@@ -369,28 +371,33 @@ public class SearchService {
 		}
 	}
 
-	private String prepareSearchRuleMap(String searchString) {
-		Set<SearchRules> searchRulesList = gson.fromJson(searchString, new TypeToken<Set<SearchRules>>() {}.getType());
+	private String prepareSearchRuleMap(String searchString, String orgId) {
 		Map<String, Set<SearchRules>> ruleMap = new LinkedHashMap<>();
-		for(SearchRules searchRules : searchRulesList) {
-			for(RuleSet rs : searchRules.getRuleSet()) {
-				String ruleKey = rs.getKey();
-				if(ruleMap.containsKey(ruleKey)) {
-					Set<SearchRules> pseudoRuleKeyList = ruleMap.get(ruleKey);
-					pseudoRuleKeyList.add(searchRules);
-					ruleMap.put(ruleKey.toString(), pseudoRuleKeyList);
-				} else {
-					Set<SearchRules> ruleKeyList = new HashSet<>();
-					ruleKeyList.add(searchRules);
-					ruleMap.put(ruleKey.toString(), ruleKeyList);
-				}
-				if(rs.getType().intValue() == 2) {
-					// Check for contains with, clone it for starts with and ends with
-					keyLookup(ruleMap, rs.getKey(), rs.getValue());
+		try {
+			Set<SearchRules> searchRulesList = gson.fromJson(searchString, new TypeToken<Set<SearchRules>>() {}.getType());
+			for(SearchRules searchRules : searchRulesList) {
+				for(RuleSet rs : searchRules.getRuleSet()) {
+					String ruleKey = rs.getKey();
+					if(ruleMap.containsKey(ruleKey)) {
+						Set<SearchRules> pseudoRuleKeyList = ruleMap.get(ruleKey);
+						pseudoRuleKeyList.add(searchRules);
+						ruleMap.put(ruleKey.toString(), pseudoRuleKeyList);
+					} else {
+						Set<SearchRules> ruleKeyList = new HashSet<>();
+						ruleKeyList.add(searchRules);
+						ruleMap.put(ruleKey.toString(), ruleKeyList);
+					}
+					if(rs.getType().intValue() == 2) {
+						// Check for contains with, clone it for starts with and ends with
+						keyLookup(ruleMap, rs.getKey(), rs.getValue());
+					}
 				}
 			}
+			return this.gson.toJson(ruleMap);
+		} catch(Exception e) {
+			log.error("Exception occurred {}", orgId, e);
 		}
-		return this.gson.toJson(ruleMap);
+		return new JSONObject().toString();
 	}
 
 	private void keyLookup(Map<String, Set<SearchRules>> ruleMap, String lookupKey, String lookupString) {
