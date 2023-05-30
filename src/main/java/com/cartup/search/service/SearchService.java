@@ -157,10 +157,10 @@ public class SearchService {
 			SearchResult searchResult = toSearchResult(res, facetMap, pinnedProductsRef, productsToBeRemovedRef)
 					.setCurrency(docu.getCurrency())
 					.setSortEntity(docu.getSortEntity())
-					.setNumberofdocs(res.getNumFound())
 					.setPagination(docu.getPaginationCount())
 					.setSearchSelector(docu.getSearchSelectors())
 					.setSearchTheme(docu.getSearchThemes());
+			searchResult.setNumberofdocs(searchResult.getDocs().size());
 			return searchResult;
 		} catch (Exception e){
 			log.error("Failed to execute search", e);
