@@ -142,7 +142,7 @@ public class SearchQueryBuilderTask {
     	String querywords = String.join(" ", filteredSearchQueries);
     	int countWords = querywords.split("\\s").length;
     	int mincount= (countWords < 4) ? 1: 2;
-    	logger.info("Query String : %s %d", querywords, mincount);
+    	logger.info(String.format("Query String : %s %d", querywords, mincount));
     	solrQuery.append(AND).append("mm=" + String.valueOf(mincount) + "<50%25");	
     }
     
@@ -286,7 +286,7 @@ public class SearchQueryBuilderTask {
     }
 
     public void addFilteredQueries() {
-    	String finalFilterQuery = new LinkedHashSet<>(Arrays.asList(filteredSearchQueries.stream().collect(Collectors.joining(" ")).split(" "))).stream().collect(Collectors.joining(" "));
+    	String finalFilterQuery = new LinkedHashSet<>(Arrays.asList(filteredSearchQueries.stream().map(String::toLowerCase).collect(Collectors.joining(" ")).split(" "))).stream().map(String::toLowerCase).collect(Collectors.joining(" "));
         solrQuery.append(AND).append("q=").append(String.join(" ", finalFilterQuery));
     }
 
