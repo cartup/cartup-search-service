@@ -52,7 +52,7 @@ public class PLPBuilderTask {
     // Filtered search queries is
     private List<String> filteredSearchQueries = new ArrayList<>();
     private List<String> categories = new ArrayList<>();
-    private StringBuffer solrQuery = new StringBuffer("defType=edismax&facet=on&facet.mincount=1&mm=2<75%25");
+    private StringBuffer solrQuery = new StringBuffer("defType=edismax&facet=on");
     private Map<String, Facet> facetMap = new HashMap<>();
     public Map<String, Facet> getFacetMap(){
         return facetMap;
@@ -147,11 +147,11 @@ public class PLPBuilderTask {
     }
 
     public void addFilteredQueries() {
-        solrQuery.append(AND).append("q=").append("*:*");
+        solrQuery.append(AND).append("q=").append(category);
     }
 
     public void addCategory() throws UnsupportedEncodingException {
-    	solrQuery.append(AND).append("fq=").append(String.format(EQUAL_QUERY_FILTER_TEMPLATE, COLLECTION_TXT,  "\"" + category.toString() + "\"" ));
+    	solrQuery.append(AND).append("qf=").append("name_t^2 collection_txt^10 description_t^.5 keywords_ss^5 brand_s^5 sku_s^10 color_s^5 categories_ss^20 category_s^50");
     }
     
     public void addFacets() {
