@@ -18,32 +18,6 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
-	<distributionManagement>
-		<repository>
-			<id>Java_artifacts</id>
-			<url>https://pkgs.dev.azure.com/Cartup/12547135-111b-4c87-81fb-5642876aad53/_packaging/Java_artifacts/maven/v1</url>
-			<releases>
-				<enabled>true</enabled>
-			</releases>
-			<snapshots>
-				<enabled>true</enabled>
-			</snapshots>
-		</repository>
-	</distributionManagement>
-
-	<repositories>
-		<repository>
-			<id>Java_artifacts</id>
-			<url>https://pkgs.dev.azure.com/Cartup/12547135-111b-4c87-81fb-5642876aad53/_packaging/Java_artifacts/maven/v1</url>
-			<releases>
-				<enabled>true</enabled>
-			</releases>
-			<snapshots>
-				<enabled>true</enabled>
-			</snapshots>
-		</repository>
-	</repositories>
-
 
 	<dependencies>
 		<dependency>
@@ -103,11 +77,6 @@
 		<dependency>
 		    <groupId>org.springframework.boot</groupId>
 		    <artifactId>spring-boot-starter-data-redis</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.cartup.ai</groupId>
-			<artifactId>cartup-api-server</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 

@@ -80,24 +80,29 @@ public class PLPService {
         List<ProductInfo> docs = new ArrayList<>();
         if (EmptyUtil.isNotEmpty(result.getResult())){
             for (SpotDyProductDocument doc : result.getResult()){
-                ProductInfo info = new ProductInfo()
-                        .setName(doc.getNameS())
-                        .setPrice(String.valueOf(doc.getPriceD()))
-                        .setSmallImage(doc.getImageS())
-                        .setSku(doc.getSkuS())
-                        .setCurrentPageUrl(doc.getCannoicalUrlS())
-                        .setDescription(doc.getDescriptionT())
-                        .setDiscountedPrice(String.valueOf(doc.getDiscountePriceD()))
-                        .setRating(String.valueOf(doc.getRatingD()));
-                if (doc.getVariantB()){
-                    VariantInfo variantInfo = new VariantInfo(doc.getLinkedProductNameSs(), doc.getLinkedProductPriceDs(),
-                            doc.getLinkedProductDiscountedpriceDs(), doc.getStockIDs(), doc.getLinkedProductSkuSs(),
-                            doc.getLinkedProductIdLs(), doc.getLinkedVariantIdSs());
-
-                    info.setVariantInfo(variantInfo.generateVariantInfo());
-                }
-                docs.add(info);
+            	try {
+	                ProductInfo info = new ProductInfo()
+	                        .setName(doc.getNameS())
+	                        .setPrice(String.valueOf(doc.getPriceD()))
+	                        .setSmallImage(doc.getImageS())
+	                        .setSku(doc.getSkuS())
+	                        .setCurrentPageUrl(doc.getCannoicalUrlS())
+	                        .setDescription(doc.getDescriptionT())
+	                        .setDiscountedPrice(String.valueOf(doc.getDiscountePriceD()))
+	                        .setRating(String.valueOf(doc.getRatingD()));
+	                if (doc.getVariantB() != null && doc.getVariantB()){
+	                    VariantInfo variantInfo = new VariantInfo(doc.getLinkedProductNameSs(), doc.getLinkedProductPriceDs(),
+	                            doc.getLinkedProductDiscountedpriceDs(), doc.getStockIDs(), doc.getLinkedProductSkuSs(),
+	                            doc.getLinkedProductIdLs(), doc.getLinkedVariantIdSs());
+	
+	                    info.setVariantInfo(variantInfo.generateVariantInfo());
+	                }
+	                docs.add(info);
+            	} catch (Exception e) {
+            		e.printStackTrace();
+            	}
             }
+            
         }
 
         Set<FacetEntity> facets = new HashSet<>();
