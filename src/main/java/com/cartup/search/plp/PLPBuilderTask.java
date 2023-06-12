@@ -52,7 +52,7 @@ public class PLPBuilderTask {
     // Filtered search queries is
     private List<String> filteredSearchQueries = new ArrayList<>();
     private List<String> categories = new ArrayList<>();
-    private StringBuffer solrQuery = new StringBuffer("defType=edismax&facet=on");
+    private StringBuffer solrQuery = new StringBuffer("defType=edismax&facet=on&facet.mincount=1");
     private Map<String, Facet> facetMap = new HashMap<>();
     public Map<String, Facet> getFacetMap(){
         return facetMap;
@@ -136,7 +136,7 @@ public class PLPBuilderTask {
         addPagination();
         addSortEntities();
         addFilters();
-        boostUserSignals();
+        //boostUserSignals();
         solrQuery.append(AND).append("fq=visibility_b:").append(true);
         System.out.println(solrQuery.toString());
         return solrQuery.toString();
