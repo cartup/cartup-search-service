@@ -123,19 +123,19 @@ public class SearchService {
 							// REMOVE KEYWORD
 							StringBuilder newSearchQuery = new StringBuilder();
 							action.getValue().stream().forEach(keywordToRemove -> {
-								newSearchQuery.append(searchRequest.getSearchQuery().replaceAll(keywordToRemove, ""));
+								newSearchQuery.append(searchRequest.getSearchQuery().replaceAll(keywordToRemove.toLowerCase(), ""));
 							});
 							searchRequest.setSearchQuery(newSearchQuery.toString());
 						}
 						if(action.getType() == 3) {
 							// REMOVE ITEM
-							productsToBeRemovedRef.set(action.getValue());
+							productsToBeRemovedRef.set(action.getValue().stream().map(String::toLowerCase).collect(Collectors.toList()));
 						}
 						if(action.getType() == 4) {
 							// REPLACE A KEYWORD
 							StringBuilder newSearchQuery = new StringBuilder();
 							action.getValue().stream().forEach(keywordToReplace -> {
-								newSearchQuery.append(searchRequest.getSearchQuery().replaceAll(keywordToReplace, action.getBufferField()));
+								newSearchQuery.append(searchRequest.getSearchQuery().replaceAll(keywordToReplace.toLowerCase(), action.getBufferField().toLowerCase()));
 							});
 							searchRequest.setSearchQuery(newSearchQuery.toString());
 						}
@@ -257,6 +257,8 @@ public class SearchService {
 				
 				Map<String, Object> cacheMap = this.gson.fromJson(String.valueOf(cacheJsonObject), new TypeToken<Map<String, Object>>() {}.getType());
 
+				searchRequest.setSearchQuery(searchRequest.getSearchQuery().toLowerCase());
+				
 				String searchQuery = searchRequest.getSearchQuery();
 
 				String[] searchKeywordList = searchQuery.split(" ");
@@ -269,8 +271,10 @@ public class SearchService {
 
 				if(cacheMap.containsKey("ruleLookupMap")) {
 					String ruleLookupJson = String.valueOf(cacheMap.get("ruleLookupMap"));
-					Map<String, Set<SearchRules>> ruleMap = this.gson.fromJson(ruleLookupJson, new TypeToken<Map<String, Set<SearchRules>>>() {}.getType());
-
+					Map<String, Set<SearchRules>> cachedRuleMap = this.gson.fromJson(ruleLookupJson, new TypeToken<Map<String, Set<SearchRules>>>() {}.getType());
+					
+					Map<String, Set<SearchRules>> ruleMap = cachedRuleMap.entrySet().stream()
+							.collect(Collectors.toMap(entry -> entry.getKey().toLowerCase(), entry -> entry.getValue()));
 					// Check for scenario what if the given search query keyword matches startsWith and endsWith
 					for(String keyword : searchKeywordList) {
 						String startsWithKey = String.format("%d*_*%s", 1, keyword);
@@ -291,14 +295,14 @@ public class SearchService {
 						for(RuleSet ruleSet : searchRule.getRuleSet()) {
 							String operator = StringUtils.isNotBlank(ruleSet.getOperator())? (ruleSet.getOperator().equals("AND") ? "&&" : ruleSet.getOperator().equals("OR") ? "||" : StringUtils.EMPTY) : StringUtils.EMPTY;
 							if(ruleSet.getType() == 1) {
-								ruleExpression.append(ruleSet.getValue().equals(startKeyword)).append(operator);
+								ruleExpression.append(ruleSet.getValue().equalsIgnoreCase(startKeyword)).append(operator);
 							}
 							if(ruleSet.getType() == 2) {
-								ruleExpression.append(searchQuery.contains(ruleSet.getValue())).append(operator);
+								ruleExpression.append(searchQuery.contains(ruleSet.getValue().toLowerCase())).append(operator);
 							}
 
 							if(ruleSet.getType() == 3) {
-								ruleExpression.append(ruleSet.getValue().equals(endKeyword)).append(operator);
+								ruleExpression.append(ruleSet.getValue().equalsIgnoreCase(endKeyword)).append(operator);
 							}
 						}
 						// using Spring's SpEL to evaluate the boolean expression
