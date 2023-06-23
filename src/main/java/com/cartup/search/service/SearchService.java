@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -170,7 +171,7 @@ public class SearchService {
 
 	private SearchResult toSearchResult(ProductsFacetResult result, Map<String, Facet> facetMap, AtomicReference<List<SpotDyProductDocument>> pinnedProductsRef, AtomicReference<List<String>> productsToBeRemovedRef){
 		List<ProductInfo> docs = new ArrayList<>();
-		List<SpotDyProductDocument> pinnedProducts = pinnedProductsRef.get();
+		Set<SpotDyProductDocument> pinnedProducts = new LinkedHashSet<>(pinnedProductsRef.get());
 		pinnedProducts.addAll(result.getResult());
 		if (EmptyUtil.isNotEmpty(pinnedProducts)){
 			for (SpotDyProductDocument doc : pinnedProducts){
