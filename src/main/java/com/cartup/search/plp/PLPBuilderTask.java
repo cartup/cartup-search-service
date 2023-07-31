@@ -161,7 +161,12 @@ public class PLPBuilderTask {
                 for (Facet f : facet.getFacets()){
                     if (EmptyUtil.isNotEmpty(f.getValue())){
                         for (QueryEntity qe : f.getValue()){
-                            String facetKey = String.format("%s:%s", f.getRepoFieldName(), qe.getValue());
+                        	String facetKey = String.format("%s:%s", f.getRepoFieldName(), qe.getValue());
+                        	if (f.getOperator().equals(GREATER_THAN_OPERATOR)) {
+                        		facetKey = String.format("%s:[%s TO %s]", f.getRepoFieldName(), qe.getValue(), "*");
+                    		} else if (f.getOperator().equals(LESS_THAN_OPERATOR)) {
+                    			facetKey = String.format("%s:[%s TO %s]", f.getRepoFieldName(), "*", qe.getValue());
+                    		}
                             facetMap.put(facetKey, new Facet(f.getType(), f.getDisplayType(), 
                             		f.getRepoFieldName(), f.getDisplayName(), f.getOperator(), qe));
                             solrQuery.append(AND).append("facet.query=").append(facetKey);
@@ -256,7 +261,11 @@ public class PLPBuilderTask {
                         if (filBuff.length() > 1){
                             filBuff.append(" ").append("OR").append(" ");
                         }
-                        filBuff.append(fValue);
+                        try {
+							filBuff.append(URLEncoder.encode(fValue, StandardCharsets.UTF_8.toString()));
+						} catch (UnsupportedEncodingException e) {
+							logger.error("Exception occurred while encoding the given filter query value", e);
+						}
                     }
                 }
                 filBuff.append(")");
