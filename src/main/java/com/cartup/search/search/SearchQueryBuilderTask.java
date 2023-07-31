@@ -1,8 +1,12 @@
 package com.cartup.search.search;
 
+import static com.cartup.commons.repo.RepoConstants.GREATER_THAN_OPERATOR;
+import static com.cartup.commons.repo.RepoConstants.LESS_THAN_OPERATOR;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -258,7 +262,11 @@ public class SearchQueryBuilderTask {
                         if (filBuff.length() > 1){
                             filBuff.append(" ").append("OR").append(" ");
                         }
-                        filBuff.append(fValue);
+                        try {
+							filBuff.append(URLEncoder.encode(fValue, StandardCharsets.UTF_8.toString()));
+						} catch (UnsupportedEncodingException e) {
+							logger.error("Exception occurred while encoding the given filter query value", e);
+						}
                     }
                 }
                 filBuff.append(")");
@@ -336,6 +344,11 @@ public class SearchQueryBuilderTask {
                     if (EmptyUtil.isNotEmpty(f.getValue())){
                         for (QueryEntity qe : f.getValue()){
                             String facetKey = String.format("%s:%s", f.getRepoFieldName(), qe.getValue());
+                        	if (f.getOperator().equals(GREATER_THAN_OPERATOR)) {
+                        		facetKey = String.format("%s:[%s TO %s]",f.getRepoFieldName(), qe.getValue(), "*");
+                    		} else if (f.getOperator().equals(LESS_THAN_OPERATOR)) {
+                    			facetKey = String.format("%s:[%s TO %s]",f.getRepoFieldName(), "*", qe.getValue());
+                    		}
                             facetMap.put(facetKey, new Facet(f.getType(), f.getDisplayType(), 
                             		f.getRepoFieldName(), f.getDisplayName(), f.getOperator(), qe));
                             solrQuery.append(AND).append("facet.query=").append(facetKey);
