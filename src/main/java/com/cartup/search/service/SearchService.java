@@ -50,8 +50,10 @@ import com.cartup.search.modal.RuleSet;
 import com.cartup.search.modal.SearchRequest;
 import com.cartup.search.modal.SearchResult;
 import com.cartup.search.modal.SearchRules;
+import com.cartup.search.modal.SimilaritySearchRequest;
 import com.cartup.search.modal.VariantInfo;
 import com.cartup.search.search.SearchQueryBuilderTask;
+import com.cartup.search.util.SearchUtils;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -463,6 +465,31 @@ public class SearchService {
 			log.error("Failed to get search conf document", e);
 		}
 		return Optional.empty();
+	}
+
+	public List<ProductInfo> processSimilarSearch(SimilaritySearchRequest similaritySearchRequest) {
+		try {
+			Map<String, SpotDyProductDocument> anchorProductMap = new HashMap<>();
+			if(StringUtils.isNotBlank(similaritySearchRequest.getSku())) {
+				anchorProductMap = productRepoClient.ListUsingSKUs(similaritySearchRequest.getOrgId(), Arrays.asList(similaritySearchRequest.getSku()), false);
+			} else if(StringUtils.isNotBlank(similaritySearchRequest.getPname())) {
+				anchorProductMap = productRepoClient.ListUsingNames(similaritySearchRequest.getOrgId(), Arrays.asList(similaritySearchRequest.getPname()), false);
+			}
+			
+			if(Optional.ofNullable(anchorProductMap).isPresent()) {
+				SpotDyProductDocument anchorProduct = new ArrayList<>(anchorProductMap.values()).get(0);
+				if(anchorProduct.getSimilarSkuSs() != null) {
+					Map<String, SpotDyProductDocument> similarProductMap = productRepoClient.ListUsingSKUs(similaritySearchRequest.getOrgId(), anchorProduct.getSimilarSkuSs(), false);
+					if(!similarProductMap.isEmpty()) {
+						return SearchUtils.convertToProductInfo(new ArrayList<>(similarProductMap.values()));
+					}
+				}
+			}
+			
+		} catch (CartUpRepoException e) {
+			log.error("Failed to get similar search documents", e);
+		}
+		return new ArrayList<>();
 	}
 
 }
