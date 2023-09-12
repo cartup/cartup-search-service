@@ -1,6 +1,7 @@
 package com.cartup.search.controller;
 
 
+import java.util.List;
 import java.util.Map;
 
 import org.json.JSONObject;
@@ -19,8 +20,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.cartup.commons.exceptions.CartUpServiceException;
 import com.cartup.commons.repo.RepoFactory;
+import com.cartup.search.modal.ProductInfo;
 import com.cartup.search.modal.SearchRequest;
 import com.cartup.search.modal.SearchResult;
+import com.cartup.search.modal.SimilaritySearchRequest;
 import com.cartup.search.service.CacheService;
 import com.cartup.search.service.SearchService;
 import com.google.gson.Gson;
@@ -88,6 +91,19 @@ public class SearchController {
             return ResponseEntity.ok().body(response.toString());
         } catch (Exception e) {
             logger.error("Error while processing search request", e);
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    
+    @RequestMapping(value = "/v1/search/similar", method = RequestMethod.GET, produces = "application/json")
+    protected ResponseEntity<String> getSimilarSearch(@RequestParam Map<String, String> reqParams) throws CartUpServiceException {
+        try {
+            logger.info(String.format("Get similar search request : %s", gson.toJson(reqParams)));
+            SimilaritySearchRequest similaritySearchRequest = gson.fromJson(reqParams.get("request"), SimilaritySearchRequest.class);
+            List<ProductInfo> res  = service.processSimilarSearch(similaritySearchRequest);
+            return ResponseEntity.ok(gson.toJson(res));
+        } catch (Exception e) {
+            logger.error("Error while processing similar search request", e);
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
