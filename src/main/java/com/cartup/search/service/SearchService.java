@@ -163,7 +163,6 @@ public class SearchService {
 					.setPagination(docu.getPaginationCount())
 					.setSearchSelector(docu.getSearchSelectors())
 					.setSearchTheme(docu.getSearchThemes());
-			searchResult.setNumberofdocs(searchResult.getDocs().size());
 			return searchResult;
 		} catch (Exception e){
 			log.error("Failed to execute search", e);
@@ -248,7 +247,7 @@ public class SearchService {
 			Collections.sort(orderedFacets, new FacetComparator());
 		}
 
-		return new SearchResult().setDocs(resultDocs).setFacetcount(orderedFacets);
+		return new SearchResult().setDocs(resultDocs).setFacetcount(orderedFacets).setNumberofdocs(result.getNumFound());
 	}
 
 	private List<ActionSet> searchAlgorithm(SearchRequest searchRequest) {
