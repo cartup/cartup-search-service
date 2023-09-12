@@ -1,6 +1,7 @@
 package com.cartup.search.controller;
 
 
+import java.util.List;
 import java.util.Map;
 
 import org.json.JSONObject;
@@ -12,14 +13,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import com.cartup.commons.exceptions.CartUpServiceException;
 import com.cartup.commons.repo.RepoFactory;
+import com.cartup.search.modal.ProductInfo;
 import com.cartup.search.modal.SearchRequest;
 import com.cartup.search.modal.SearchResult;
+import com.cartup.search.modal.SimilaritySearchRequest;
 import com.cartup.search.service.CacheService;
 import com.cartup.search.service.SearchService;
 import com.google.gson.Gson;
@@ -60,6 +64,23 @@ public class SearchController {
         }
     }
     
+    @CrossOrigin
+    @RequestMapping(value = "/v1/widgetserver/search/result", method = RequestMethod.POST, produces = "application/json")
+    protected ResponseEntity<String> getSearchResultByPostReq(@RequestBody Map<String, String> reqParams) {
+        try {
+            logger.info(String.format("Get review widget request : %s", gson.toJson(reqParams)));
+            SearchRequest searchRequest = gson.fromJson(reqParams.get("request"), SearchRequest.class);
+            SearchResult res  = service.processSearch(reqParams, searchRequest);
+            return ResponseEntity.ok(gson.toJson(res));
+        } catch (CartUpServiceException cse) {
+            logger.error("Error while validating search request", cse);
+            return new ResponseEntity<>(cse.getMessage(), HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            logger.error("Error while processing search request", e);
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    
     @RequestMapping(value = "/v1/search/cache/refresh", method = RequestMethod.GET, produces = "application/json")
     protected ResponseEntity<String> refreshCache(@RequestParam Map<String, String> reqParams) throws CartUpServiceException {
         try {
@@ -70,6 +91,19 @@ public class SearchController {
             return ResponseEntity.ok().body(response.toString());
         } catch (Exception e) {
             logger.error("Error while processing search request", e);
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    
+    @RequestMapping(value = "/v1/search/similar", method = RequestMethod.GET, produces = "application/json")
+    protected ResponseEntity<String> getSimilarSearch(@RequestParam Map<String, String> reqParams) throws CartUpServiceException {
+        try {
+            logger.info(String.format("Get similar search request : %s", gson.toJson(reqParams)));
+            SimilaritySearchRequest similaritySearchRequest = gson.fromJson(reqParams.get("request"), SimilaritySearchRequest.class);
+            List<ProductInfo> res  = service.processSimilarSearch(similaritySearchRequest);
+            return ResponseEntity.ok(gson.toJson(res));
+        } catch (Exception e) {
+            logger.error("Error while processing similar search request", e);
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
