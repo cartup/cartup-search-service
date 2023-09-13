@@ -14,5 +14,6 @@ public class SimilaritySearchRequest {
     private String orgId;
     private String sku;
     private String pname;
+    private String type;
 
 }
