@@ -478,8 +478,29 @@ public class SearchService {
 			
 			if(Optional.ofNullable(anchorProductMap).isPresent()) {
 				SpotDyProductDocument anchorProduct = new ArrayList<>(anchorProductMap.values()).get(0);
-				if(anchorProduct.getSimilarSkuSs() != null) {
-					Map<String, SpotDyProductDocument> similarProductMap = productRepoClient.ListUsingSKUs(similaritySearchRequest.getOrgId(), anchorProduct.getSimilarSkuSs(), false);
+				if(similaritySearchRequest.getType().equals("image")) {
+					if(anchorProduct.getImageClipEmbVtr() == null) {
+						JSONObject embeddingResponse = this.cacheService.getClipEmbVtr("image", "image_url", anchorProduct.getImageBaseUrlS());
+						if(embeddingResponse == null) {
+							return new ArrayList<>();
+						}
+						List<Double> embedding = gson.fromJson(embeddingResponse.get("emdeddings").toString(), new TypeToken<List<Double>>() {}.getType());
+						anchorProduct.setImageClipEmbVtr(embedding);
+					}
+					Map<String, SpotDyProductDocument> similarProductMap = productRepoClient.searchMatchingVector(similaritySearchRequest.getOrgId(), anchorProduct.getImageClipEmbVtr(), RepoConstants.IMAGE_CLIP_EMB_VTR);
+					if(!similarProductMap.isEmpty()) {
+						return SearchUtils.convertToProductInfo(new ArrayList<>(similarProductMap.values()));
+					}
+				} else {
+					if(anchorProduct.getDescriptionClipEmbVtr() == null) {
+						JSONObject embeddingResponse = this.cacheService.getClipEmbVtr("text", "text", anchorProduct.getDescriptionT());
+						if(embeddingResponse == null) {
+							return new ArrayList<>();
+						}
+						List<Double> embedding = gson.fromJson(embeddingResponse.get("emdeddings").toString(), new TypeToken<List<Double>>() {}.getType());
+						anchorProduct.setDescriptionClipEmbVtr(embedding);
+					}
+					Map<String, SpotDyProductDocument> similarProductMap = productRepoClient.searchMatchingVector(similaritySearchRequest.getOrgId(), anchorProduct.getDescriptionClipEmbVtr(), RepoConstants.DESCRIPTION_CLIP_EMB_VTR);
 					if(!similarProductMap.isEmpty()) {
 						return SearchUtils.convertToProductInfo(new ArrayList<>(similarProductMap.values()));
 					}
