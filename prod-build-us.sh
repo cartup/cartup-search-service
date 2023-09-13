@@ -3,7 +3,7 @@
 set -ex
 
 REGISTRY="arvindnr"
-IMAGE_NAME="searchapi-cartup"
+IMAGE_NAME="searchapi-cartup-us"
 TAG="${1}"
 dir="$(pwd)/Dockerfile-prod-us"
 
