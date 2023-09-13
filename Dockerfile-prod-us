@@ -1,6 +1,6 @@
 FROM openjdk:8
 ADD build/docker/entrypoint-prod.sh /entrypoint.sh
-ADD src/main/resources/application-prod.properties /application.properties
+ADD src/main/resources/application-us.properties /application.properties
 COPY conf /conf/
 ADD conf/datastoreconfig-prod.properties /conf/datastoreconfig.properties
 RUN apt update && apt install vim -y
