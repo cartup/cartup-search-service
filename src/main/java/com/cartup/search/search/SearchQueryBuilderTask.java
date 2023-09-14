@@ -118,11 +118,12 @@ public class SearchQueryBuilderTask {
 	        		filteredSearchQueries.add(inputSearch);
 	        	
 	        	filteredSearchQueries = new LinkedHashSet<String>(filteredSearchQueries);
-	        	if(keywordInfo.getAnnotations() != null) {
-	        		if (EmptyUtil.isNotEmpty(keywordInfo.getAnnotations().getCategories().getCat_suggestions())) {
-		        		categories.addAll(keywordInfo.getAnnotations().getCategories().getCat_suggestions());    		
-		        	}
-	        	}
+//				TODO Commenting this code till we fix the keyword suggester 
+//	        	if(keywordInfo.getAnnotations() != null) {
+//	        		if (EmptyUtil.isNotEmpty(keywordInfo.getAnnotations().getCategories().getCat_suggestions())) {
+//		        		categories.addAll(keywordInfo.getAnnotations().getCategories().getCat_suggestions());    		
+//		        	}
+//	        	}
 	        	
 	        	categories = new ArrayList<String>(new LinkedHashSet<String>(categories));
 	        	
