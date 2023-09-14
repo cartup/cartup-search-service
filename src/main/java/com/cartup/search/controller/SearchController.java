@@ -1,7 +1,6 @@
 package com.cartup.search.controller;
 
 
-import java.util.List;
 import java.util.Map;
 
 import org.json.JSONObject;
@@ -20,9 +19,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.cartup.commons.exceptions.CartUpServiceException;
 import com.cartup.commons.repo.RepoFactory;
-import com.cartup.search.modal.ProductInfo;
 import com.cartup.search.modal.SearchRequest;
 import com.cartup.search.modal.SearchResult;
+import com.cartup.search.modal.SimilarSearchResult;
 import com.cartup.search.modal.SimilaritySearchRequest;
 import com.cartup.search.service.CacheService;
 import com.cartup.search.service.SearchService;
@@ -100,7 +99,7 @@ public class SearchController {
         try {
             logger.info(String.format("Get similar search request : %s", gson.toJson(reqParams)));
             SimilaritySearchRequest similaritySearchRequest = gson.fromJson(reqParams.get("request"), SimilaritySearchRequest.class);
-            List<ProductInfo> res  = service.processSimilarSearch(similaritySearchRequest);
+            SimilarSearchResult res  = service.processSimilarSearch(similaritySearchRequest);
             return ResponseEntity.ok(gson.toJson(res));
         } catch (Exception e) {
             logger.error("Error while processing similar search request", e);
