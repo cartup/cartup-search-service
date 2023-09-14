@@ -50,6 +50,7 @@ import com.cartup.search.modal.RuleSet;
 import com.cartup.search.modal.SearchRequest;
 import com.cartup.search.modal.SearchResult;
 import com.cartup.search.modal.SearchRules;
+import com.cartup.search.modal.SimilarSearchResult;
 import com.cartup.search.modal.SimilaritySearchRequest;
 import com.cartup.search.modal.VariantInfo;
 import com.cartup.search.search.SearchQueryBuilderTask;
@@ -467,7 +468,9 @@ public class SearchService {
 		return Optional.empty();
 	}
 
-	public List<ProductInfo> processSimilarSearch(SimilaritySearchRequest similaritySearchRequest) {
+	public SimilarSearchResult processSimilarSearch(SimilaritySearchRequest similaritySearchRequest) {
+		Set<ProductInfo> similarSearchProducts = new HashSet<>();
+		SimilarSearchResult searchResult = new SimilarSearchResult();
 		try {
 			Map<String, SpotDyProductDocument> anchorProductMap = new HashMap<>();
 			if(StringUtils.isNotBlank(similaritySearchRequest.getSku())) {
@@ -482,35 +485,48 @@ public class SearchService {
 					if(anchorProduct.getImageClipEmbVtr() == null) {
 						JSONObject embeddingResponse = this.cacheService.getClipEmbVtr("image", "image_url", anchorProduct.getImageBaseUrlS());
 						if(embeddingResponse == null) {
-							return new ArrayList<>();
+							searchResult.setSuccess(0);
+							return searchResult;
 						}
 						List<Double> embedding = gson.fromJson(embeddingResponse.get("emdeddings").toString(), new TypeToken<List<Double>>() {}.getType());
 						anchorProduct.setImageClipEmbVtr(embedding);
 					}
 					Map<String, SpotDyProductDocument> similarProductMap = productRepoClient.searchMatchingVector(similaritySearchRequest.getOrgId(), anchorProduct.getImageClipEmbVtr(), RepoConstants.IMAGE_CLIP_EMB_VTR);
 					if(!similarProductMap.isEmpty()) {
-						return SearchUtils.convertToProductInfo(new ArrayList<>(similarProductMap.values()));
+						List<SpotDyProductDocument> similarProducts = new ArrayList<>();
+						similarProducts.add(anchorProduct);
+						similarProducts.addAll(similarProductMap.values());
+						similarSearchProducts.addAll(SearchUtils.convertToProductInfo(similarProducts));
+						searchResult.setSuccess(1);
 					}
 				} else {
 					if(anchorProduct.getDescriptionClipEmbVtr() == null) {
 						JSONObject embeddingResponse = this.cacheService.getClipEmbVtr("text", "text", anchorProduct.getDescriptionT());
 						if(embeddingResponse == null) {
-							return new ArrayList<>();
+							searchResult.setSuccess(0);
+							return searchResult;
 						}
 						List<Double> embedding = gson.fromJson(embeddingResponse.get("emdeddings").toString(), new TypeToken<List<Double>>() {}.getType());
 						anchorProduct.setDescriptionClipEmbVtr(embedding);
 					}
 					Map<String, SpotDyProductDocument> similarProductMap = productRepoClient.searchMatchingVector(similaritySearchRequest.getOrgId(), anchorProduct.getDescriptionClipEmbVtr(), RepoConstants.DESCRIPTION_CLIP_EMB_VTR);
 					if(!similarProductMap.isEmpty()) {
-						return SearchUtils.convertToProductInfo(new ArrayList<>(similarProductMap.values()));
+						List<SpotDyProductDocument> similarProducts = new ArrayList<>();
+						similarProducts.add(anchorProduct);
+						similarProducts.addAll(similarProductMap.values());
+						similarSearchProducts.addAll(SearchUtils.convertToProductInfo(similarProducts));
+						searchResult.setSuccess(1);
 					}
 				}
 			}
 			
 		} catch (CartUpRepoException e) {
 			log.error("Failed to get similar search documents", e);
+			searchResult.setSuccess(0);
 		}
-		return new ArrayList<>();
+		searchResult.setDocs(similarSearchProducts);
+		searchResult.setNumberofdocs(similarSearchProducts.size());
+		return searchResult;
 	}
 
 }
