@@ -469,7 +469,7 @@ public class SearchService {
 	}
 
 	public SimilarSearchResult processSimilarSearch(SimilaritySearchRequest similaritySearchRequest) {
-		Set<ProductInfo> similarSearchProducts = new HashSet<>();
+		Set<ProductInfo> similarSearchProducts = new LinkedHashSet<>();
 		SimilarSearchResult searchResult = new SimilarSearchResult();
 		try {
 			Map<String, SpotDyProductDocument> anchorProductMap = new HashMap<>();
