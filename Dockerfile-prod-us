@@ -2,7 +2,7 @@ FROM openjdk:8
 ADD build/docker/entrypoint-prod.sh /entrypoint.sh
 ADD src/main/resources/application-us.properties /application.properties
 COPY conf /conf/
-ADD conf/datastoreconfig-prod.properties /conf/datastoreconfig.properties
+ADD conf/datastoreconfig-us.properties /conf/datastoreconfig.properties
 RUN apt update && apt install vim -y
 EXPOSE 8443 8080 8004
 ENTRYPOINT ["bash", "/entrypoint.sh"]
