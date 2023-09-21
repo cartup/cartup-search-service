@@ -94,6 +94,7 @@ public class SearchController {
         }
     }
     
+    @CrossOrigin
     @RequestMapping(value = "/v1/search/similar", method = RequestMethod.GET, produces = "application/json")
     protected ResponseEntity<String> getSimilarSearch(@RequestParam Map<String, String> reqParams) throws CartUpServiceException {
         try {
