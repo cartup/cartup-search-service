@@ -13,6 +13,10 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -481,6 +485,7 @@ public class SearchService {
 			
 			if(Optional.ofNullable(anchorProductMap).isPresent()) {
 				SpotDyProductDocument anchorProduct = new ArrayList<>(anchorProductMap.values()).get(0);
+				Future<Map<String, SpotDyProductDocument>> similarProductByNameFuture = processNameEmbeddings(anchorProduct);
 				if(similaritySearchRequest.getType().equals("image")) {
 					if(anchorProduct.getImageClipEmbVtr() == null) {
 						JSONObject embeddingResponse = this.cacheService.getClipEmbVtr("image", "image_url", anchorProduct.getImageBaseUrlS());
@@ -492,17 +497,20 @@ public class SearchService {
 						anchorProduct.setImageClipEmbVtr(embedding);
 					}
 					Map<String, SpotDyProductDocument> similarProductMap = productRepoClient.searchMatchingVector(similaritySearchRequest.getOrgId(), anchorProduct.getImageClipEmbVtr(), RepoConstants.IMAGE_CLIP_EMB_VTR);
+					if(similarProductMap.isEmpty()) {
+						similarProductMap = similarProductByNameFuture.get();
+					}
 					if(!similarProductMap.isEmpty()) {
-						List<SpotDyProductDocument> similarProducts = new ArrayList<>();
+						Set<SpotDyProductDocument> similarProducts = new LinkedHashSet<>();
 						similarProducts.add(anchorProduct);
 						similarProducts.addAll(similarProductMap.values());
-						similarSearchProducts.addAll(SearchUtils.convertToProductInfo(similarProducts));
+						similarSearchProducts.addAll(SearchUtils.convertToProductInfo(new ArrayList<>(similarProducts)));
 						searchResult.setSuccess(1);
 					}
 				} else {
 					if(anchorProduct.getDescriptionClipEmbVtr() == null) {
 						JSONObject embeddingResponse = this.cacheService.getClipEmbVtr("text", "text", anchorProduct.getDescriptionT());
-						if(embeddingResponse == null) {
+						if(embeddingResponse == null || embeddingResponse.equals(JSONObject.NULL) || !embeddingResponse.has("emdeddings")) {
 							searchResult.setSuccess(0);
 							return searchResult;
 						}
@@ -510,6 +518,9 @@ public class SearchService {
 						anchorProduct.setDescriptionClipEmbVtr(embedding);
 					}
 					Map<String, SpotDyProductDocument> similarProductMap = productRepoClient.searchMatchingVector(similaritySearchRequest.getOrgId(), anchorProduct.getDescriptionClipEmbVtr(), RepoConstants.DESCRIPTION_CLIP_EMB_VTR);
+					if(similarProductMap.isEmpty()) {
+						similarProductMap = similarProductByNameFuture.get();
+					}
 					if(!similarProductMap.isEmpty()) {
 						List<SpotDyProductDocument> similarProducts = new ArrayList<>();
 						similarProducts.add(anchorProduct);
@@ -520,13 +531,29 @@ public class SearchService {
 				}
 			}
 			
-		} catch (CartUpRepoException e) {
+		} catch (CartUpRepoException | InterruptedException | ExecutionException e) {
 			log.error("Failed to get similar search documents", e);
 			searchResult.setSuccess(0);
 		}
 		searchResult.setDocs(similarSearchProducts);
 		searchResult.setNumberofdocs(similarSearchProducts.size());
 		return searchResult;
+	}
+	
+	private Future<Map<String, SpotDyProductDocument>> processNameEmbeddings(SpotDyProductDocument anchorProduct) {
+		ExecutorService ex = Executors.newFixedThreadPool(1);
+		return ex.submit(() -> {
+			JSONObject embeddingResponse = this.cacheService.getClipEmbVtr("text", "text", anchorProduct.getNameS());
+			Map<String, SpotDyProductDocument> similarProductMap = new LinkedHashMap<>();
+			List<Double> embedding = gson.fromJson(embeddingResponse.get("emdeddings").toString(), new TypeToken<List<Double>>() {}.getType());
+			try {
+				anchorProduct.setNameClipEmbVtr(embedding);
+				similarProductMap = productRepoClient.searchMatchingVector(anchorProduct.getOrgIDS(), anchorProduct.getNameClipEmbVtr(), RepoConstants.NAME_CLIP_EMB_VTR);
+			} catch (CartUpRepoException e) {
+				log.error("Exception occurred while matching the name embedding vtr {}", e);
+			}
+			return similarProductMap;
+		});
 	}
 
 }
