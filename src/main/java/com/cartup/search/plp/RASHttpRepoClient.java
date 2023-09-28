@@ -1,15 +1,15 @@
 package com.cartup.search.plp;
-
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -18,32 +18,29 @@ import com.cartup.commons.repo.RepoFactory;
 public class RASHttpRepoClient {
     public static String dasHost =  RepoFactory.getConfigProperty("redis.api.server");
 
-    public JSONObject getUserProfile(String body) throws Exception {
-        HttpURLConnection conn;
-        URL nurl = new URL(dasHost);
-        conn = (HttpURLConnection) nurl.openConnection();
-        conn.setDoOutput(true);
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-        conn.setRequestProperty("Accept", "application/json");
+    public JSONObject getUserProfile(String jsonBody) {
+        String jsonResponse = null;
 
-        // Send post request
-        conn.setDoOutput(true);
-        OutputStream os= new DataOutputStream(conn.getOutputStream());
-        os.write(body.getBytes("UTF-8"));
-        os.close();
+        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+            HttpPost httpPost = new HttpPost(dasHost + "/user_stats");
+            httpPost.setHeader("Content-type", "application/json");
+            httpPost.setHeader("Accept", "application/json");
+            
+            StringEntity stringEntity = new StringEntity(jsonBody, "UTF-8");
+            httpPost.setEntity(stringEntity);
 
-        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-        StringBuilder output = new StringBuilder();
-        String line = null;
-        while ((line = br.readLine()) != null) {
-            output = output.append(line);
+            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
+                HttpEntity entity = response.getEntity();
+
+                if (entity != null) {
+                    jsonResponse = EntityUtils.toString(entity, "UTF-8");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        br.close();
 
-        conn.disconnect();
-        JSONObject response = new JSONObject(output.toString());
-		return response;
+        return new JSONObject(jsonResponse);
     }
     
     public static void main(String[] args) throws Exception {
