@@ -1,7 +1,7 @@
 package com.cartup.search.plp;
 
 import static com.cartup.commons.repo.RepoConstants.*;
-
+import java.time.Instant;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -88,9 +88,12 @@ public class PLPBuilderTask {
     	try {
         	RASHttpRepoClient http = new RASHttpRepoClient();
         	JSONObject resp = http.getUserProfile(json.toString()); 
+        	JSONObject userStats = (JSONObject) resp.get("user_stats");
     		JSONObject featuresViewStats = (JSONObject) ((JSONObject) resp.get("user_stats")).get("features_view_stats");
     		JSONArray features = (JSONArray) ((JSONObject) resp.get("user_stats")).get("features");
     		for(int i=0; i< features.length(); i++) {
+    			if (featuresViewStats.isNull((String) features.get(i)))
+    				continue;
     			JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
     			HashMap<String, Double> feature_value_score = new HashMap<String, Double>();
     			@SuppressWarnings("unchecked")
@@ -107,11 +110,22 @@ public class PLPBuilderTask {
     		for (Map.Entry<String, HashMap<String, Double>> entry : features_scores.entrySet()) {
     			for (Map.Entry<String, Double> subEntry : entry.getValue().entrySet()) {
     				
-    				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", "") + "\"",
-    						StandardCharsets.UTF_8.toString())  + ")^" + subEntry.getValue());
+    				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
+    						StandardCharsets.UTF_8.toString())  + "\")^" + subEntry.getValue());
     			}
     			querybuffer.append("&");
     		}
+    		
+    		if (userStats.has("range_featuresview_stats")) {
+    			JSONObject rangeViewStats = (JSONObject) userStats.get("range_featuresview_stats");
+    			JSONArray range_features = (JSONArray) userStats.get("range_features");
+    			for(int i=0; i< range_features.length(); i++) {
+    				JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
+    				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
+    						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
+    				querybuffer.append("&");
+    			}
+    	     }
     		querybuffer.deleteCharAt(querybuffer.length()-1);
     		solrQuery.append(AND).append(querybuffer.toString());
     		//Boost User Signals
@@ -136,7 +150,7 @@ public class PLPBuilderTask {
         addPagination();
         addSortEntities();
         addFilters();
-        //boostUserSignals();
+        boostUserSignals();
         solrQuery.append(AND).append("fq=visibility_b:").append(true);
         System.out.println(solrQuery.toString());
         return solrQuery.toString();
@@ -147,7 +161,22 @@ public class PLPBuilderTask {
     }
 
     public void addFilteredQueries() {
-        solrQuery.append(AND).append("q=").append(category);
+    	KeywordSuggestorHttpRepoClient nlp_obj = new KeywordSuggestorHttpRepoClient();
+    	JSONObject json = new JSONObject();
+    	json.put("org_s", orgName);
+    	json.put("orgid", orgId);
+    	json.put("user_id", userId);
+    	json.put("keyword", category);
+    	json.put("lang", "en");
+ 
+    	try {
+    		JSONObject nlp_payload = nlp_obj.getLangFeatures(json.toString());
+			solrQuery.append(AND).append("q=").append(nlp_obj.getLemmaKeyword(nlp_payload));
+		} catch (Exception e) {
+			e.printStackTrace();
+			solrQuery.append(AND).append("q=").append(category);
+		}
+        
     }
 
     public void addCategory() throws UnsupportedEncodingException {
@@ -161,12 +190,7 @@ public class PLPBuilderTask {
                 for (Facet f : facet.getFacets()){
                     if (EmptyUtil.isNotEmpty(f.getValue())){
                         for (QueryEntity qe : f.getValue()){
-                        	String facetKey = String.format("%s:%s", f.getRepoFieldName(), qe.getValue());
-                        	if (f.getOperator().equals(GREATER_THAN_OPERATOR)) {
-                        		facetKey = String.format("%s:[%s TO %s]", f.getRepoFieldName(), qe.getValue(), "*");
-                    		} else if (f.getOperator().equals(LESS_THAN_OPERATOR)) {
-                    			facetKey = String.format("%s:[%s TO %s]", f.getRepoFieldName(), "*", qe.getValue());
-                    		}
+                            String facetKey = String.format("%s:%s", f.getRepoFieldName(), qe.getValue());
                             facetMap.put(facetKey, new Facet(f.getType(), f.getDisplayType(), 
                             		f.getRepoFieldName(), f.getDisplayName(), f.getOperator(), qe));
                             solrQuery.append(AND).append("facet.query=").append(facetKey);
@@ -261,11 +285,7 @@ public class PLPBuilderTask {
                         if (filBuff.length() > 1){
                             filBuff.append(" ").append("OR").append(" ");
                         }
-                        try {
-							filBuff.append(URLEncoder.encode(fValue, StandardCharsets.UTF_8.toString()));
-						} catch (UnsupportedEncodingException e) {
-							logger.error("Exception occurred while encoding the given filter query value", e);
-						}
+                        filBuff.append(fValue);
                     }
                 }
                 filBuff.append(")");
