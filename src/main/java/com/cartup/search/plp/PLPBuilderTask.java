@@ -91,15 +91,17 @@ public class PLPBuilderTask {
     		JSONObject featuresViewStats = (JSONObject) ((JSONObject) resp.get("user_stats")).get("features_view_stats");
     		JSONArray features = (JSONArray) ((JSONObject) resp.get("user_stats")).get("features");
     		for(int i=0; i< features.length(); i++) {
-    			JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
-    			HashMap<String, Double> feature_value_score = new HashMap<String, Double>();
-    			@SuppressWarnings("unchecked")
-				Iterator<String> keys = fobj.keys();
-    			while(keys.hasNext()) {
-    			    String key = keys.next();
-    			    feature_value_score.put(key, (Double) fobj.get(key));
+    			if(!featuresViewStats.get((String) features.get(i)).equals(JSONObject.NULL)) {
+    				JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
+    				HashMap<String, Double> feature_value_score = new HashMap<String, Double>();
+    				@SuppressWarnings("unchecked")
+    				Iterator<String> keys = fobj.keys();
+    				while(keys.hasNext()) {
+    					String key = keys.next();
+    					feature_value_score.put(key, (Double) fobj.get(key));
+    				}
+    				features_scores.put((String) features.get(i),  feature_value_score);
     			}
-    			features_scores.put((String) features.get(i),  feature_value_score);
     		} 		
     		
     		StringBuffer querybuffer = new StringBuffer();
@@ -107,12 +109,22 @@ public class PLPBuilderTask {
     		for (Map.Entry<String, HashMap<String, Double>> entry : features_scores.entrySet()) {
     			for (Map.Entry<String, Double> subEntry : entry.getValue().entrySet()) {
     				
-    				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", "") + "\"",
-    						StandardCharsets.UTF_8.toString())  + ")^" + subEntry.getValue());
+    				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
+    						StandardCharsets.UTF_8.toString())  + "\")^" + subEntry.getValue());
     			}
     			querybuffer.append("&");
     		}
     		querybuffer.deleteCharAt(querybuffer.length()-1);
+    		if (resp.has("range_featuresview_stats")) {
+    			JSONObject rangeViewStats = (JSONObject) resp.get("range_featuresview_stats");
+    			JSONArray range_features = (JSONArray) resp.get("range_features");
+    			for(int i=0; i< range_features.length(); i++) {
+    				JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
+    				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
+    						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
+    				querybuffer.append("&");
+    			}
+    	     }
     		solrQuery.append(AND).append(querybuffer.toString());
     		//Boost User Signals
 		} catch (Exception e) {

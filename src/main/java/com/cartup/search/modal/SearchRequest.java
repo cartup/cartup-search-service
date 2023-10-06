@@ -5,6 +5,8 @@ import java.util.List;
 import com.cartup.commons.repo.model.search.SortEntity;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
 
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY, getterVisibility = JsonAutoDetect.Visibility.NONE,
         setterVisibility = JsonAutoDetect.Visibility.NONE, isGetterVisibility= JsonAutoDetect.Visibility.NONE)
@@ -18,6 +20,10 @@ public class SearchRequest {
     private List<SortEntity> sortEntities;
     private List<FacetFilter> filters;
     private List<String> categories;
+    @SerializedName("keyword_suggester")
+    private String keywordSuggestor;
+    
+    private Gson gson = new Gson();
 
     public String getOrgName() {
         return orgName;
@@ -77,6 +83,22 @@ public class SearchRequest {
 
     public void setFilters(List<FacetFilter> filters) {
         this.filters = filters;
+    }
+    
+    public KeywordSuggestorResponse getKeywordSuggestor() {
+        return gson.fromJson(keywordSuggestor, KeywordSuggestorResponse.class);
+    }
+    
+    public String getKeywordSuggestorString() {
+        return keywordSuggestor;
+    }
+    
+    public void setKeywordSuggestorString(String keywordSuggesstor) {
+        this.keywordSuggestor = keywordSuggesstor;
+    }
+
+    public void setKeywordSuggestor(KeywordSuggestorResponse keywordSuggestor) {
+        this.keywordSuggestor = gson.toJson(keywordSuggestor).toString();
     }
 
 //    public static void main(String[] args){
