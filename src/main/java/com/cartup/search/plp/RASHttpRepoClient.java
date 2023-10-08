@@ -18,16 +18,14 @@ import com.cartup.commons.repo.RepoFactory;
 public class RASHttpRepoClient {
     public static String dasHost =  RepoFactory.getConfigProperty("redis.api.server");
 
-    public JSONObject getUserProfile(String jsonBody) {
-        String jsonResponse = null;
-
-        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
-            HttpPost httpPost = new HttpPost(dasHost + "/user_stats");
-            httpPost.setHeader("Content-type", "application/json");
-            httpPost.setHeader("Accept", "application/json");
-            
-            StringEntity stringEntity = new StringEntity(jsonBody, "UTF-8");
-            httpPost.setEntity(stringEntity);
+    public JSONObject getUserProfile(String body) throws Exception {
+        HttpURLConnection conn;
+        URL nurl = new URL(dasHost + "/user_stats");
+        conn = (HttpURLConnection) nurl.openConnection();
+        conn.setDoOutput(true);
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+        conn.setRequestProperty("Accept", "application/json");
 
             try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
                 HttpEntity entity = response.getEntity();

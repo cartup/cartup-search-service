@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +46,7 @@ import com.cartup.search.modal.FacetFilter;
 import com.cartup.search.modal.KeyWordSuggestorRequest;
 import com.cartup.search.modal.KeywordSuggestorResponse;
 import com.cartup.search.modal.SearchRequest;
+import com.cartup.search.plp.RASHttpRepoClient;
 import com.google.gson.Gson;
 
 public class SearchQueryBuilderTask {
@@ -97,9 +100,9 @@ public class SearchQueryBuilderTask {
     	this.inputSearch = searchRequest.getSearchQuery();
     	try {
 	    	KeywordSuggestorResponse keywordInfo = new KeywordSuggestorResponse();
-	        if (EmptyUtil.isNotNull(searchConf) && searchConf.isSpellcheck()){
+	        if (EmptyUtil.isNotNull(searchConf) && searchConf.isSpellcheck() && searchRequest.getKeywordSuggestor() != null){
 	        	if (!params.containsKey("keyword_suggest"))
-	        		keywordInfo = getKeywordSuggest(inputSearch);
+	        		keywordInfo = searchRequest.getKeywordSuggestor();
 	        	else {
 	        		Gson gson = new Gson();
 	        		keywordInfo = gson.fromJson(params.get("keyword_suggest"), KeywordSuggestorResponse.class);
@@ -175,6 +178,7 @@ public class SearchQueryBuilderTask {
         addPagination();
         addSortEntities();
         addFilters();
+        boostUserSignals();
         solrQuery.append(AND).append("fq=visibility_b:").append(true);
         System.out.println(solrQuery.toString());
         return solrQuery.toString();
@@ -217,6 +221,69 @@ public class SearchQueryBuilderTask {
                 solrQuery.append(AND).append("sort=").append(params.get(SORT_KEY));
             }
         }
+    }
+    
+    public SearchQueryBuilderTask boostUserSignals() throws IOException, CartUpServiceException {
+    	List<String> categories = searchRequest.getKeywordSuggestor().getAnnotations().getCategories().getCat_suggestions();
+    	if(!categories.isEmpty()) {
+    		JSONObject json = new JSONObject();
+        	json.put("org_s", searchRequest.getOrgName());
+        	json.put("user_id", searchRequest.getUserId());
+        	json.put("cat_id", categories.get(0));
+        	json.put("stats", "view_stats");
+        	json.put("feature_stats", "features");
+        	json.put("recent_views", true);
+
+        	HashMap<String, HashMap<String, Double>> features_scores = new HashMap<String, HashMap<String, Double>>();
+        	
+        	try {
+            	RASHttpRepoClient http = new RASHttpRepoClient();
+            	JSONObject resp = http.getUserProfile(json.toString()); 
+        		JSONObject featuresViewStats = (JSONObject) ((JSONObject) resp.get("user_stats")).get("features_view_stats");
+        		JSONArray features = (JSONArray) ((JSONObject) resp.get("user_stats")).get("features");
+        		for(int i=0; i< features.length(); i++) {
+        			if(!featuresViewStats.get((String) features.get(i)).equals(JSONObject.NULL)) {
+        				JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
+            			HashMap<String, Double> feature_value_score = new HashMap<String, Double>();
+            			@SuppressWarnings("unchecked")
+        				Iterator<String> keys = fobj.keys();
+            			while(keys.hasNext()) {
+            			    String key = keys.next();
+            			    feature_value_score.put(key, (Double) fobj.get(key));
+            			}
+            			features_scores.put((String) features.get(i),  feature_value_score);
+        			}
+        		} 		
+        		
+        		StringBuffer querybuffer = new StringBuffer();
+        		//Build boosting Query
+        		for (Map.Entry<String, HashMap<String, Double>> entry : features_scores.entrySet()) {
+        			for (Map.Entry<String, Double> subEntry : entry.getValue().entrySet()) {
+        				
+        				querybuffer.append("fq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
+        						StandardCharsets.UTF_8.toString())  + "\")^" + subEntry.getValue());
+        			}
+        			querybuffer.append("&");
+        		}
+        		querybuffer.deleteCharAt(querybuffer.length()-1);
+        		if (resp.has("range_featuresview_stats")) {
+        			JSONObject rangeViewStats = (JSONObject) resp.get("range_featuresview_stats");
+        			JSONArray range_features = (JSONArray) resp.get("range_features");
+        			for(int i=0; i< range_features.length(); i++) {
+        				JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
+        				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
+        						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
+        				querybuffer.append("&");
+        			}
+        	     }
+        		solrQuery.append(AND).append(querybuffer.toString());
+        		//Boost User Signals
+    		} catch (Exception e) {
+    			// TODO Auto-generated catch block
+    			e.printStackTrace();
+    		}
+    	}
+        return this;
     }
 
     //This will add a facet filter is there is any selected by user, value in facet should be put in right order by ui
@@ -296,7 +363,30 @@ public class SearchQueryBuilderTask {
 
     public void addFilteredQueries() {
     	String finalFilterQuery = new LinkedHashSet<>(Arrays.asList(filteredSearchQueries.stream().map(String::toLowerCase).collect(Collectors.joining(" ")).split(" "))).stream().map(String::toLowerCase).collect(Collectors.joining(" "));
-        solrQuery.append(AND).append("q=").append(String.join(" ", finalFilterQuery));
+    	if(searchRequest.getKeywordSuggestor() != null) {
+    		String lemmaKeyword = this.getLemmaKeyword(new JSONObject(searchRequest.getKeywordSuggestorString()));
+    		if(finalFilterQuery.length() > 0) {
+    			if(lemmaKeyword != null) {
+    				finalFilterQuery = String.format("%s OR %s", finalFilterQuery, lemmaKeyword);
+    			}
+        	} else {
+        		if(lemmaKeyword != null) {
+    				finalFilterQuery = String.format("%s", finalFilterQuery, lemmaKeyword);
+    			}
+        	}
+    	}
+    	solrQuery.append(AND).append("q=").append(String.join(" ", finalFilterQuery));
+    	
+    }
+    
+    public String getLemmaKeyword(JSONObject resp) {
+    	String keyword = null;
+    	JSONObject annotations = (JSONObject) resp.get("annotations");
+    	JSONObject lang_features = (JSONObject) annotations.get("lang_features");
+    	if (lang_features.has("lemma_search_keyword")) {
+    		keyword = lang_features.getString("lemma_search_keyword");
+    	}
+    	return keyword;
     }
 
     public void addCategories() throws UnsupportedEncodingException {
