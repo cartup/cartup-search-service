@@ -20,7 +20,7 @@ public class RASHttpRepoClient {
 
     public JSONObject getUserProfile(String body) throws Exception {
         HttpURLConnection conn;
-        URL nurl = new URL(dasHost);
+        URL nurl = new URL(dasHost + "/user_stats");
         conn = (HttpURLConnection) nurl.openConnection();
         conn.setDoOutput(true);
         conn.setRequestMethod("POST");
