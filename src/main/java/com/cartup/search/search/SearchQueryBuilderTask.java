@@ -260,7 +260,7 @@ public class SearchQueryBuilderTask {
         		for (Map.Entry<String, HashMap<String, Double>> entry : features_scores.entrySet()) {
         			for (Map.Entry<String, Double> subEntry : entry.getValue().entrySet()) {
         				
-        				querybuffer.append("fq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
+        				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
         						StandardCharsets.UTF_8.toString())  + "\")^" + subEntry.getValue());
         			}
         			querybuffer.append("&");
