@@ -239,8 +239,9 @@ public class SearchQueryBuilderTask {
         	try {
             	RASHttpRepoClient http = new RASHttpRepoClient();
             	JSONObject resp = http.getUserProfile(json.toString()); 
-        		JSONObject featuresViewStats = (JSONObject) ((JSONObject) resp.get("user_stats")).get("features_view_stats");
-        		JSONArray features = (JSONArray) ((JSONObject) resp.get("user_stats")).get("features");
+            	JSONObject userStats = (JSONObject) resp.get("user_stats");
+        		JSONObject featuresViewStats = (JSONObject) userStats.get("features_view_stats");
+        		JSONArray features = (JSONArray) userStats.get("features");
         		for(int i=0; i< features.length(); i++) {
         			if(!featuresViewStats.get((String) features.get(i)).equals(JSONObject.NULL)) {
         				JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
@@ -265,17 +266,21 @@ public class SearchQueryBuilderTask {
         			}
         			querybuffer.append("&");
         		}
-        		querybuffer.deleteCharAt(querybuffer.length()-1);
-        		if (resp.has("range_featuresview_stats")) {
-        			JSONObject rangeViewStats = (JSONObject) resp.get("range_featuresview_stats");
-        			JSONArray range_features = (JSONArray) resp.get("range_features");
+        		if (userStats.has("range_featuresview_stats")) {
+        			JSONObject rangeViewStats = (JSONObject) userStats.get("range_featuresview_stats");
+        			JSONArray range_features = (JSONArray) userStats.get("range_features");
         			for(int i=0; i< range_features.length(); i++) {
-        				JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
-        				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
-        						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
-        				querybuffer.append("&");
+        				if(!rangeViewStats.get((String) range_features.get(i)).equals(JSONObject.NULL)) {
+	        				JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
+	        				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
+	        						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
+	        				querybuffer.append("&");
+        				}
         			}
         	     }
+        		if(StringUtils.isNotBlank(querybuffer)) {
+        			querybuffer.deleteCharAt(querybuffer.length()-1);
+        		}
         		solrQuery.append(AND).append(querybuffer.toString());
         		//Boost User Signals
     		} catch (Exception e) {
