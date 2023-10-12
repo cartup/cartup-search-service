@@ -89,7 +89,8 @@ public class PLPService {
 	                        .setCurrentPageUrl(doc.getCannoicalUrlS())
 	                        .setDescription(doc.getDescriptionT())
 	                        .setDiscountedPrice(String.valueOf(doc.getDiscountePriceD()))
-	                        .setRating(String.valueOf(doc.getRatingD()));
+	                        .setRating(String.valueOf(doc.getRatingD()))
+	                        .setStock(doc.getStockD());
 	                if (doc.getVariantB() != null && doc.getVariantB()){
 	                    VariantInfo variantInfo = new VariantInfo(doc.getLinkedProductNameSs(), doc.getLinkedProductPriceDs(),
 	                            doc.getLinkedProductDiscountedpriceDs(), doc.getStockIDs(), doc.getLinkedProductSkuSs(),
