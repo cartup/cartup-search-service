@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -120,13 +121,17 @@ public class PLPBuilderTask {
     			JSONObject rangeViewStats = (JSONObject) userStats.get("range_featuresview_stats");
     			JSONArray range_features = (JSONArray) userStats.get("range_features");
     			for(int i=0; i< range_features.length(); i++) {
-    				JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
-    				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
-    						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
-    				querybuffer.append("&");
+    				if(!rangeViewStats.get((String) range_features.get(i)).equals(JSONObject.NULL)) {
+    					JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
+        				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
+        						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
+        				querybuffer.append("&");
+    				}
     			}
     	     }
-    		querybuffer.deleteCharAt(querybuffer.length()-1);
+    		if(StringUtils.isNotBlank(querybuffer)) {
+    			querybuffer.deleteCharAt(querybuffer.length()-1);
+    		}
     		solrQuery.append(AND).append(querybuffer.toString());
     		//Boost User Signals
 		} catch (Exception e) {
