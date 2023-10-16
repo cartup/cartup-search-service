@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -67,7 +68,8 @@ public class PLPService {
                     .setCurrency(docu.getCurrency())
                     .setSortEntity(docu.getSortEntity())
                     .setNumberofdocs(res.getNumFound())
-                    .setPagination(docu.getPaginationCount())
+                    .setPagination(Optional.ofNullable(docu.getPagination()).isPresent() ? docu.getPagination() : false)
+                    .setPaginationCount(docu.getPaginationCount())
                     .setSearchSelector(docu.getSearchSelectors())
                     .setSearchTheme(docu.getSearchThemes());
         } catch (Exception e){
