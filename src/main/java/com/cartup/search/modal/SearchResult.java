@@ -21,7 +21,8 @@ public class SearchResult {
     private String success;
     private Integer numberofdocs;
     private String currency;
-    private Integer pagination;
+    private boolean pagination;
+    private Integer paginationCount;
     private SearchSortEntity sortEntity;
     private List<ProductInfo> docs = new ArrayList<>();
     private List<FacetEntity> facetcount;
@@ -46,11 +47,20 @@ public class SearchResult {
         return this;
     }
 
-    public Integer getPagination() {
+    public Integer getPaginationCount() {
+        return paginationCount;
+    }
+
+    public SearchResult setPaginationCount(Integer paginationCount) {
+        this.paginationCount = paginationCount;
+        return this;
+    }
+    
+    public boolean getPagination() {
         return pagination;
     }
 
-    public SearchResult setPagination(Integer pagination) {
+    public SearchResult setPagination(boolean pagination) {
         this.pagination = pagination;
         return this;
     }

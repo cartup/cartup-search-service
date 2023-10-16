@@ -224,69 +224,71 @@ public class SearchQueryBuilderTask {
     }
     
     public SearchQueryBuilderTask boostUserSignals() throws IOException, CartUpServiceException {
-    	List<String> categories = searchRequest.getKeywordSuggestor().getAnnotations().getCategories().getCat_suggestions();
-    	if(!categories.isEmpty()) {
-    		JSONObject json = new JSONObject();
-        	json.put("org_s", searchRequest.getOrgName());
-        	json.put("user_id", searchRequest.getUserId());
-        	json.put("cat_id", categories.get(0));
-        	json.put("stats", "view_stats");
-        	json.put("feature_stats", "features");
-        	json.put("recent_views", true);
+    	if(searchRequest.getKeywordSuggestor() != null) {
+    		List<String> categories = searchRequest.getKeywordSuggestor().getAnnotations().getCategories().getCat_suggestions();
+        	if(!categories.isEmpty()) {
+        		JSONObject json = new JSONObject();
+            	json.put("org_s", searchRequest.getOrgName());
+            	json.put("user_id", searchRequest.getUserId());
+            	json.put("cat_id", categories.get(0));
+            	json.put("stats", "view_stats");
+            	json.put("feature_stats", "features");
+            	json.put("recent_views", true);
 
-        	HashMap<String, HashMap<String, Double>> features_scores = new HashMap<String, HashMap<String, Double>>();
-        	
-        	try {
-            	RASHttpRepoClient http = new RASHttpRepoClient();
-            	JSONObject resp = http.getUserProfile(json.toString()); 
-            	JSONObject userStats = (JSONObject) resp.get("user_stats");
-        		JSONObject featuresViewStats = (JSONObject) userStats.get("features_view_stats");
-        		JSONArray features = (JSONArray) userStats.get("features");
-        		for(int i=0; i< features.length(); i++) {
-        			if(!featuresViewStats.get((String) features.get(i)).equals(JSONObject.NULL)) {
-        				JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
-            			HashMap<String, Double> feature_value_score = new HashMap<String, Double>();
-            			@SuppressWarnings("unchecked")
-        				Iterator<String> keys = fobj.keys();
-            			while(keys.hasNext()) {
-            			    String key = keys.next();
-            			    feature_value_score.put(key, (Double) fobj.get(key));
+            	HashMap<String, HashMap<String, Double>> features_scores = new HashMap<String, HashMap<String, Double>>();
+            	
+            	try {
+                	RASHttpRepoClient http = new RASHttpRepoClient();
+                	JSONObject resp = http.getUserProfile(json.toString()); 
+                	JSONObject userStats = (JSONObject) resp.get("user_stats");
+            		JSONObject featuresViewStats = (JSONObject) userStats.get("features_view_stats");
+            		JSONArray features = (JSONArray) userStats.get("features");
+            		for(int i=0; i< features.length(); i++) {
+            			if(!featuresViewStats.get((String) features.get(i)).equals(JSONObject.NULL)) {
+            				JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
+                			HashMap<String, Double> feature_value_score = new HashMap<String, Double>();
+                			@SuppressWarnings("unchecked")
+            				Iterator<String> keys = fobj.keys();
+                			while(keys.hasNext()) {
+                			    String key = keys.next();
+                			    feature_value_score.put(key, (Double) fobj.get(key));
+                			}
+                			features_scores.put((String) features.get(i),  feature_value_score);
             			}
-            			features_scores.put((String) features.get(i),  feature_value_score);
-        			}
-        		} 		
-        		
-        		StringBuffer querybuffer = new StringBuffer();
-        		//Build boosting Query
-        		for (Map.Entry<String, HashMap<String, Double>> entry : features_scores.entrySet()) {
-        			for (Map.Entry<String, Double> subEntry : entry.getValue().entrySet()) {
-        				
-        				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
-        						StandardCharsets.UTF_8.toString())  + "\")^" + subEntry.getValue());
-        			}
-        			querybuffer.append("&");
+            		} 		
+            		
+            		StringBuffer querybuffer = new StringBuffer();
+            		//Build boosting Query
+            		for (Map.Entry<String, HashMap<String, Double>> entry : features_scores.entrySet()) {
+            			for (Map.Entry<String, Double> subEntry : entry.getValue().entrySet()) {
+            				
+            				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
+            						StandardCharsets.UTF_8.toString())  + "\")^" + subEntry.getValue());
+            			}
+            			querybuffer.append("&");
+            		}
+            		if (userStats.has("range_featuresview_stats")) {
+            			JSONObject rangeViewStats = (JSONObject) userStats.get("range_featuresview_stats");
+            			JSONArray range_features = (JSONArray) userStats.get("range_features");
+            			for(int i=0; i< range_features.length(); i++) {
+            				if(!rangeViewStats.get((String) range_features.get(i)).equals(JSONObject.NULL)) {
+    	        				JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
+    	        				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
+    	        						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
+    	        				querybuffer.append("&");
+            				}
+            			}
+            	     }
+            		if(StringUtils.isNotBlank(querybuffer)) {
+            			querybuffer.deleteCharAt(querybuffer.length()-1);
+            		}
+            		solrQuery.append(AND).append(querybuffer.toString());
+            		//Boost User Signals
+        		} catch (Exception e) {
+        			// TODO Auto-generated catch block
+        			e.printStackTrace();
         		}
-        		if (userStats.has("range_featuresview_stats")) {
-        			JSONObject rangeViewStats = (JSONObject) userStats.get("range_featuresview_stats");
-        			JSONArray range_features = (JSONArray) userStats.get("range_features");
-        			for(int i=0; i< range_features.length(); i++) {
-        				if(!rangeViewStats.get((String) range_features.get(i)).equals(JSONObject.NULL)) {
-	        				JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
-	        				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
-	        						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
-	        				querybuffer.append("&");
-        				}
-        			}
-        	     }
-        		if(StringUtils.isNotBlank(querybuffer)) {
-        			querybuffer.deleteCharAt(querybuffer.length()-1);
-        		}
-        		solrQuery.append(AND).append(querybuffer.toString());
-        		//Boost User Signals
-    		} catch (Exception e) {
-    			// TODO Auto-generated catch block
-    			e.printStackTrace();
-    		}
+        	}
     	}
         return this;
     }

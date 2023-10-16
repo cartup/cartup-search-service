@@ -165,7 +165,8 @@ public class SearchService {
 			SearchResult searchResult = toSearchResult(res, facetMap, pinnedProductsRef, productsToBeRemovedRef)
 					.setCurrency(docu.getCurrency())
 					.setSortEntity(docu.getSortEntity())
-					.setPagination(docu.getPaginationCount())
+					.setPagination(Optional.ofNullable(docu.getPagination()).isPresent() ? docu.getPagination() : false)
+					.setPaginationCount(docu.getPaginationCount())
 					.setSearchSelector(docu.getSearchSelectors())
 					.setSearchTheme(docu.getSearchThemes());
 			return searchResult;
