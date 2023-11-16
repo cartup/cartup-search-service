@@ -1,6 +1,8 @@
 package com.cartup.search.controller;
 
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.json.JSONObject;
@@ -19,7 +21,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.cartup.commons.exceptions.CartUpServiceException;
 import com.cartup.commons.repo.RepoFactory;
+import com.cartup.search.modal.FacetFilter;
 import com.cartup.search.modal.SearchRequest;
+import com.cartup.search.modal.SearchRequestWrapper;
 import com.cartup.search.modal.SearchResult;
 import com.cartup.search.modal.SimilarSearchResult;
 import com.cartup.search.modal.SimilaritySearchRequest;
@@ -106,5 +110,45 @@ public class SearchController {
             logger.error("Error while processing similar search request", e);
             return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+    
+    @CrossOrigin
+    @RequestMapping(value = "/v1/search/result", method = RequestMethod.POST, produces = "application/json")
+    protected ResponseEntity<String> getSearchResultWrapper(@RequestBody Map<String, String> reqParams) {
+        try {
+            logger.info(String.format("Get review widget request : %s", gson.toJson(reqParams)));
+            SearchRequestWrapper searchRequestWrapper = gson.fromJson(reqParams.toString(), SearchRequestWrapper.class);
+            SearchResult res  = service.processSearch(reqParams, getSearchRequest(searchRequestWrapper));
+            return ResponseEntity.ok(gson.toJson(res));
+        } catch (CartUpServiceException cse) {
+            logger.error("Error while validating search request", cse);
+            return new ResponseEntity<>(cse.getMessage(), HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            logger.error("Error while processing search request", e);
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    
+    private SearchRequest getSearchRequest(SearchRequestWrapper wrapper) {
+    	SearchRequest searchRequest = new SearchRequest();
+    	searchRequest.setOrgId(wrapper.getOrgId());
+    	searchRequest.setUserId(wrapper.getUserId());
+    	searchRequest.setSearchQuery(wrapper.getProductName());
+    	searchRequest.setCategories(wrapper.getCategories());
+    	wrapper.toMap().entrySet().stream().forEach(entry -> {
+    		FacetFilter filter = new FacetFilter();
+        	filter.setRepoFieldId(entry.getKey());
+        	filter.setValue(String.valueOf(entry.getValue()));
+        	if(searchRequest.getFilters().isEmpty()) {
+        		List<FacetFilter> filters = new ArrayList<>();
+        		filters.add(filter);
+        		searchRequest.setFilters(filters);
+        	} else {
+        		List<FacetFilter> filters = searchRequest.getFilters();
+        		filters.add(filter);
+        		searchRequest.setFilters(filters);
+        	}
+    	});
+		return searchRequest;
     }
 }
