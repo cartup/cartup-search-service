@@ -1,7 +1,8 @@
 package com.cartup.search.plp;
 
-import static com.cartup.commons.repo.RepoConstants.*;
-import java.time.Instant;
+import static com.cartup.commons.repo.RepoConstants.EQUAL_QUERY_FILTER_TEMPLATE;
+import static com.cartup.commons.repo.RepoConstants.ORG_ID_S;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -30,6 +31,9 @@ import com.cartup.commons.util.ValueUtil;
 import com.cartup.search.modal.FacetFilter;
 import com.cartup.search.modal.SearchRequest;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class PLPBuilderTask {
     private static Logger logger = LoggerFactory.getLogger(PLPBuilderTask.class);
 
@@ -89,54 +93,56 @@ public class PLPBuilderTask {
     	try {
         	RASHttpRepoClient http = new RASHttpRepoClient();
         	JSONObject resp = http.getUserProfile(json.toString()); 
-        	JSONObject userStats = (JSONObject) resp.get("user_stats");
-    		JSONObject featuresViewStats = (JSONObject) ((JSONObject) resp.get("user_stats")).get("features_view_stats");
-    		JSONArray features = (JSONArray) ((JSONObject) resp.get("user_stats")).get("features");
-    		for(int i=0; i< features.length(); i++) {
-    			if (featuresViewStats.isNull((String) features.get(i)))
-    				continue;
-    			JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
-    			HashMap<String, Double> feature_value_score = new HashMap<String, Double>();
-    			@SuppressWarnings("unchecked")
-				Iterator<String> keys = fobj.keys();
-    			while(keys.hasNext()) {
-    			    String key = keys.next();
-    			    feature_value_score.put(key, (Double) fobj.get(key));
-    			}
-    			features_scores.put((String) features.get(i),  feature_value_score);
-    		} 		
-    		
-    		StringBuffer querybuffer = new StringBuffer();
-    		//Build boosting Query
-    		for (Map.Entry<String, HashMap<String, Double>> entry : features_scores.entrySet()) {
-    			for (Map.Entry<String, Double> subEntry : entry.getValue().entrySet()) {
-    				
-    				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
-    						StandardCharsets.UTF_8.toString())  + "\")^" + subEntry.getValue());
-    			}
-    			querybuffer.append("&");
-    		}
-    		
-    		if (userStats.has("range_featuresview_stats")) {
-    			JSONObject rangeViewStats = (JSONObject) userStats.get("range_featuresview_stats");
-    			JSONArray range_features = (JSONArray) userStats.get("range_features");
-    			for(int i=0; i< range_features.length(); i++) {
-    				if(!rangeViewStats.get((String) range_features.get(i)).equals(JSONObject.NULL)) {
-    					JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
-        				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
-        						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
-        				querybuffer.append("&");
-    				}
-    			}
-    	     }
-    		if(StringUtils.isNotBlank(querybuffer)) {
-    			querybuffer.deleteCharAt(querybuffer.length()-1);
-    		}
-    		solrQuery.append(AND).append(querybuffer.toString());
+        	
+        	if(resp.has("user_stats")) {
+        		JSONObject userStats = (JSONObject) resp.get("user_stats");
+        		JSONObject featuresViewStats = (JSONObject) ((JSONObject) resp.get("user_stats")).get("features_view_stats");
+        		JSONArray features = (JSONArray) ((JSONObject) resp.get("user_stats")).get("features");
+        		for(int i=0; i< features.length(); i++) {
+        			if (featuresViewStats.isNull((String) features.get(i)))
+        				continue;
+        			JSONObject fobj = (JSONObject) featuresViewStats.get((String) features.get(i));
+        			HashMap<String, Double> feature_value_score = new HashMap<String, Double>();
+        			@SuppressWarnings("unchecked")
+    				Iterator<String> keys = fobj.keys();
+        			while(keys.hasNext()) {
+        			    String key = keys.next();
+        			    feature_value_score.put(key, (Double) fobj.get(key));
+        			}
+        			features_scores.put((String) features.get(i),  feature_value_score);
+        		} 		
+        		
+        		StringBuffer querybuffer = new StringBuffer();
+        		//Build boosting Query
+        		for (Map.Entry<String, HashMap<String, Double>> entry : features_scores.entrySet()) {
+        			for (Map.Entry<String, Double> subEntry : entry.getValue().entrySet()) {
+        				
+        				querybuffer.append("bq=" + entry.getKey() + ":(" +   "\"" +  URLEncoder.encode(subEntry.getKey().replace("%", "").replace("/", ""),
+        						StandardCharsets.UTF_8.toString())  + "\")^" + subEntry.getValue());
+        			}
+        			querybuffer.append("&");
+        		}
+        		
+        		if (userStats.has("range_featuresview_stats")) {
+        			JSONObject rangeViewStats = (JSONObject) userStats.get("range_featuresview_stats");
+        			JSONArray range_features = (JSONArray) userStats.get("range_features");
+        			for(int i=0; i< range_features.length(); i++) {
+        				if(!rangeViewStats.get((String) range_features.get(i)).equals(JSONObject.NULL)) {
+        					JSONArray fobj = (JSONArray) rangeViewStats.get((String) range_features.get(i));
+            				querybuffer.append("bq=" + (String) range_features.get(i) + ":["  + 
+            						Double.parseDouble(fobj.getString(2)) + " TO " + Double.parseDouble(fobj.getString(3)) + "]^10");
+            				querybuffer.append("&");
+        				}
+        			}
+        	     }
+        		if(StringUtils.isNotBlank(querybuffer)) {
+        			querybuffer.deleteCharAt(querybuffer.length()-1);
+        		}
+        		solrQuery.append(AND).append(querybuffer.toString());
+        	}
     		//Boost User Signals
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			log.error("Exception while boosting user signal", e);
 		}
         return this;
     }
@@ -176,7 +182,11 @@ public class PLPBuilderTask {
  
     	try {
     		JSONObject nlp_payload = nlp_obj.getLangFeatures(json.toString());
-			solrQuery.append(AND).append("q=").append(nlp_obj.getLemmaKeyword(nlp_payload));
+    		if(!nlp_payload.get("status").equals("FAIL")) {
+    			solrQuery.append(AND).append("q=").append(nlp_obj.getLemmaKeyword(nlp_payload));	
+    		} else {
+    			solrQuery.append(AND).append("q=").append(category);
+    		}
 		} catch (Exception e) {
 			e.printStackTrace();
 			solrQuery.append(AND).append("q=").append(category);
