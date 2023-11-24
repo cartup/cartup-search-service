@@ -15,35 +15,45 @@ import org.json.JSONObject;
 
 import com.cartup.commons.repo.RepoFactory;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class RASHttpRepoClient {
     public static String dasHost =  RepoFactory.getConfigProperty("redis.api.server");
 
     public JSONObject getUserProfile(String body) throws Exception {
-        HttpURLConnection conn;
-        URL nurl = new URL(dasHost + "/user_stats");
-        conn = (HttpURLConnection) nurl.openConnection();
-        conn.setDoOutput(true);
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-        conn.setRequestProperty("Accept", "application/json");
+    	try {
 
-        // Send post request
-        conn.setDoOutput(true);
-        OutputStream os= new DataOutputStream(conn.getOutputStream());
-        os.write(body.getBytes("UTF-8"));
-        os.close();
+            HttpURLConnection conn;
+            URL nurl = new URL(dasHost + "/user_stats");
+            conn = (HttpURLConnection) nurl.openConnection();
+            conn.setDoOutput(true);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            conn.setRequestProperty("Accept", "application/json");
 
-        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-        StringBuilder output = new StringBuilder();
-        String line = null;
-        while ((line = br.readLine()) != null) {
-            output = output.append(line);
-        }
-        br.close();
+            // Send post request
+            conn.setDoOutput(true);
+            OutputStream os= new DataOutputStream(conn.getOutputStream());
+            os.write(body.getBytes("UTF-8"));
+            os.close();
 
-        conn.disconnect();
-        JSONObject response = new JSONObject(output.toString());
-		return response;
+            BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line = null;
+            while ((line = br.readLine()) != null) {
+                output = output.append(line);
+            }
+            br.close();
+
+            conn.disconnect();
+            JSONObject response = new JSONObject(output.toString());
+    		return response;
+        
+    	} catch(Exception e) {
+    		log.error("Exception occured while calling user cache", e);
+    	}
+    	return new JSONObject();
     }
     
     public static void main(String[] args) throws Exception {
