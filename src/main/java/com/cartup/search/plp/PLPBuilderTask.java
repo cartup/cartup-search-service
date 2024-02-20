@@ -161,7 +161,7 @@ public class PLPBuilderTask {
         addPagination();
         addSortEntities();
         addFilters();
-        boostUserSignals();
+//        boostUserSignals();
         solrQuery.append(AND).append("fq=visibility_b:").append(true);
         System.out.println(solrQuery.toString());
         return solrQuery.toString();
