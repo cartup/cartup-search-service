@@ -108,7 +108,7 @@ public class SearchService {
 				searchQuery = "";
 			}
 
-			CartUpSearchConfDocument docu = client.GetUsingOrgId(orgId);
+			CartUpSearchConfDocument docu = client.GetUsingOrgId(orgId, false);
 			if (EmptyUtil.isNull(docu)){
 				throw new CartUpServiceException(String.format("No search configuration is saved for org id %s", orgId));
 			}
