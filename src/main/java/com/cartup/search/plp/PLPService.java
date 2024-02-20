@@ -53,8 +53,7 @@ public class PLPService {
                 // throw new CartUpServiceException("search query is empty");
 
             }
-
-            CartUpSearchConfDocument docu = client.GetUsingOrgId(orgId);
+            CartUpSearchConfDocument docu = client.GetUsingOrgId(orgId, true);
             if (EmptyUtil.isNull(docu)){
                 throw new CartUpServiceException(String.format("No search configuration is saved for org id %s", orgId));
             }
