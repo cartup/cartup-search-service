@@ -3,6 +3,7 @@ package com.cartup.search.controller;
 import java.util.Map;
 
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -30,11 +31,11 @@ public class PlpController {
 
     private PLPService service;
 	
-	public PlpController() {
+	public PlpController(RedisTemplate<String, String> redisTemplate) {
         try{
             gson = new Gson();
             RepoFactory.loadConfiguration();
-            this.service = new PLPService();
+            this.service = new PLPService(redisTemplate);
         } catch (Exception e){
             log.error("Failed to initialize widget controller", e);
         }
