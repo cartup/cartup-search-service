@@ -53,6 +53,7 @@ public class PLPBuilderTask {
 	private String categoryListApiUrl;
     private String category;
     private RASHttpRepoClient dasClient;
+    private boolean isCallForCache;
 
     // Filtered search queries is
     private List<String> filteredSearchQueries = new ArrayList<>();
@@ -65,7 +66,7 @@ public class PLPBuilderTask {
 
 
     public PLPBuilderTask(String orgId, String orgName, String userId, Map<String, String> params, 
-    		String category, CartUpSearchConfDocument searchConf, SearchRequest searchRequest){
+    		String category, CartUpSearchConfDocument searchConf, SearchRequest searchRequest, boolean isCallForCache){
         this.orgId = orgId;
         this.userId = userId;
         this.orgName = orgName;
@@ -77,6 +78,7 @@ public class PLPBuilderTask {
         this.searchSpellCheckApiUrl = RepoFactory.getSearchSpellCheckApiUrl();
         this.categoryListApiUrl = RepoFactory.getCategoryListApiUrl();
         this.dasClient = new RASHttpRepoClient();
+        this.isCallForCache = isCallForCache;
     }
     
     public PLPBuilderTask boostUserSignals() throws IOException, CartUpServiceException {
@@ -223,23 +225,28 @@ public class PLPBuilderTask {
     
     
     public void addPagination() {
-        if (EmptyUtil.isNotNull(ValueUtil.get(() -> searchRequest.getPagination()))){
-            if (EmptyUtil.isNotNull(searchRequest.getPagination().getRow())){
-                solrQuery.append(AND).append("rows=").append(searchRequest.getPagination().getRow());
-            }
+    	if(isCallForCache) {
+    		solrQuery.append(AND).append("rows=").append(200);
+    		solrQuery.append(AND).append("start=").append(0);
+    	} else {
+    		if (EmptyUtil.isNotNull(ValueUtil.get(() -> searchRequest.getPagination()))){
+                if (EmptyUtil.isNotNull(searchRequest.getPagination().getRow())){
+                    solrQuery.append(AND).append("rows=").append(searchRequest.getPagination().getRow());
+                }
 
-            if (EmptyUtil.isNotNull(searchRequest.getPagination().getStart())){
-                solrQuery.append(AND).append("start=").append(searchRequest.getPagination().getStart());
-            }
-        } else {
-            if (EmptyUtil.isNotNull(searchConf) && EmptyUtil.isNotNull(searchConf.getPaginationCount())){
-                solrQuery.append(AND).append("rows=").append(searchConf.getPaginationCount());
-            }
+                if (EmptyUtil.isNotNull(searchRequest.getPagination().getStart())){
+                    solrQuery.append(AND).append("start=").append(searchRequest.getPagination().getStart());
+                }
+            } else {
+                if (EmptyUtil.isNotNull(searchConf) && EmptyUtil.isNotNull(searchConf.getPaginationCount())){
+                    solrQuery.append(AND).append("rows=").append(searchConf.getPaginationCount());
+                }
 
-            if (EmptyUtil.isNotEmpty(params) && EmptyUtil.isNotEmpty(params.get("start"))){
-                solrQuery.append(AND).append("start=").append(params.get("start"));
+                if (EmptyUtil.isNotEmpty(params) && EmptyUtil.isNotEmpty(params.get("start"))){
+                    solrQuery.append(AND).append("start=").append(params.get("start"));
+                }
             }
-        }
+    	}
     }
 
     public void addSortEntities() {
