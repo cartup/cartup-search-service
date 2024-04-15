@@ -226,7 +226,7 @@ public class PLPBuilderTask {
     
     public void addPagination() {
     	if(isCallForCache) {
-    		solrQuery.append(AND).append("rows=").append(200);
+    		solrQuery.append(AND).append("rows=").append(100);
     		solrQuery.append(AND).append("start=").append(0);
     	} else {
     		if (EmptyUtil.isNotNull(ValueUtil.get(() -> searchRequest.getPagination()))){

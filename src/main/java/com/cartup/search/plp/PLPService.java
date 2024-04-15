@@ -80,7 +80,7 @@ public class PLPService {
             }
             SearchResult searchResult = new SearchResult();
             String configKey = String.format("%s:%s", plpRequest.getOrgId(), "plp_docs");
-            if(this.redisTemplate.hasKey(configKey)) {
+            if((plpRequest.getFilters().isEmpty() && plpRequest.getSortEntities().isEmpty() && plpRequest.getFilters().isEmpty()) && this.redisTemplate.hasKey(configKey)) {
             	ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
                 Map<String, Object> cacheMap = this.gson.fromJson(valueOperations.get(configKey), Map.class);
                 searchResult = getPLPListing(null, null, cacheMap, plpRequest, reqParams, docu)
@@ -93,8 +93,10 @@ public class PLPService {
         		ProductsFacetResult res =  client.Execute(orgId, solrQuery, 1000);
         		searchResult = getPLPListing(res, facetMap, null, plpRequest, reqParams, docu)
         		        .setNumberofdocs(res.getNumFound());
-            	cachePlpResponse(reqParams, plpRequest, orgId, userId, orgName, category, docu,
-						configKey);
+        		if((plpRequest.getFilters().isEmpty() && plpRequest.getSortEntities().isEmpty() && plpRequest.getFilters().isEmpty())) {
+        			cachePlpResponse(reqParams, plpRequest, orgId, userId, orgName, category, docu,
+    						configKey);
+        		}
                 
             }
             return searchResult.setCurrency(docu.getCurrency())
@@ -223,8 +225,8 @@ public class PLPService {
 		SearchResult searchResult = new SearchResult();
 		
 		if (EmptyUtil.isNotNull(ValueUtil.get(() -> plpRequest.getPagination()))){
-            if (EmptyUtil.isNotNull(plpRequest.getPagination().getRow())){
-            	endIndex = plpRequest.getPagination().getRow();
+            if (EmptyUtil.isNotNull(plpRequest.getPagination().getStart()) && EmptyUtil.isNotNull(plpRequest.getPagination().getRow())){
+            	endIndex = plpRequest.getPagination().getStart() + plpRequest.getPagination().getRow();
             }
 
             if (EmptyUtil.isNotNull(plpRequest.getPagination().getStart())){
