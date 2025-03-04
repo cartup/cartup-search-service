@@ -79,8 +79,9 @@ public class PLPService {
                 throw new CartUpServiceException(String.format("No search configuration is saved for org id %s", orgId));
             }
             SearchResult searchResult = new SearchResult();
-            String configKey = String.format("%s:%s", plpRequest.getOrgId(), "plp_docs");
-            if((plpRequest.getFilters().isEmpty() && plpRequest.getSortEntities().isEmpty() && plpRequest.getFilters().isEmpty()) && this.redisTemplate.hasKey(configKey)) {
+            String flag = "false";
+            String configKey = String.format("%s:%s:%s:%s", plpRequest.getOrgId(), "plp_docs", plpRequest.getUserId(), plpRequest.getSearchQuery());
+            if((plpRequest.getFilters().isEmpty() && plpRequest.getSortEntities().isEmpty() && plpRequest.getFilters().isEmpty()) && this.redisTemplate.hasKey(configKey) && flag == "true") {
             	ValueOperations<String, String> valueOperations = redisTemplate.opsForValue();
                 Map<String, Object> cacheMap = this.gson.fromJson(valueOperations.get(configKey), Map.class);
                 searchResult = getPLPListing(null, null, cacheMap, plpRequest, reqParams, docu)
